@@ -2,3 +2,4 @@ configs/
 state/
 node_modules
 .DS_Store
+code/spr_atlas_plugin
