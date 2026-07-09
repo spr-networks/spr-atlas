@@ -50,9 +50,13 @@ COPY --from=cacerts /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifi
 RUN set -eux; \
     printf 'Types: deb\nURIs: https://snapshot.ubuntu.com/ubuntu/%s\nSuites: noble noble-updates noble-security\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' "${UBUNTU_SNAPSHOT}" > /etc/apt/sources.list.d/ubuntu.sources; \
     printf 'APT::Install-Recommends "false";\nAcquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99reproducible
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates git build-essential autoconf automake libtool libssl-dev \
-    && rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/ldconfig/aux-cache
+RUN set -eux; \
+    apt-get update; \
+    SSL_VERSION="$(apt-cache policy libssl-dev | awk '/Candidate:/ { print $2 }')"; \
+    apt-get install -y --no-install-recommends --allow-downgrades \
+      ca-certificates git build-essential autoconf automake libtool \
+      "libssl3t64=${SSL_VERSION}" "libssl-dev=${SSL_VERSION}"; \
+    rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/ldconfig/aux-cache
 # Fetch exactly the pinned commit (no branches/tags trusted at build time).
 RUN set -eux; \
     mkdir -p /src/atlas; cd /src/atlas; \
