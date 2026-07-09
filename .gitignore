@@ -1,0 +1,4 @@
+configs/
+state/
+node_modules
+.DS_Store

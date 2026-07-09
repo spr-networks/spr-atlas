@@ -1,0 +1,45 @@
+version: '3.4'
+
+x-labels:
+  &default-labels
+  # constant (not $CI) so digests are reproducible across CI/local
+  org.supernetworks.ci: "true"
+  org.supernetworks.version: ${RELEASE_VERSION:-latest}${RELEASE_CHANNEL:-}
+
+services:
+  spr-atlas:
+    container_name: spr-atlas
+    image: ghcr.io/spr-networks/spr-atlas:${RELEASE_VERSION:-latest}${RELEASE_CHANNEL:-}
+    build:
+      context: "${BUILDCTX:-.}"
+      labels: *default-labels
+    # Used as the ssh key comment when the probe keypair is generated.
+    hostname: spr-atlas
+    # NET_RAW: the RIPE Atlas measurement engine (busybox: evping/evtraceroute)
+    # opens raw ICMP sockets for ping and traceroute measurements. The probe
+    # itself runs as an unprivileged user; startup grants only the net_raw
+    # ambient capability to the probe process tree. NET_ADMIN is NOT needed:
+    # the probe never creates interfaces, routes or firewall rules.
+    cap_add:
+      - NET_RAW
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      atlasnet:
+    volumes:
+      - "${SUPERDIR}./state/plugins/spr-atlas:/state/plugins/spr-atlas"
+      # Probe identity (ssh keypair) + config: survives rebuilds/upgrades.
+      - "${SUPERDIR}./state/plugins/spr-atlas/etc:/etc/ripe-atlas"
+      # Probe working/spool dir (measurement queues, crontabs).
+      - "${SUPERDIR}./state/plugins/spr-atlas/spool:/var/spool/ripe-atlas"
+      - "${SUPERDIR}./state/public/:/state/public/:ro"
+      - "${SUPERDIR}./state/api/:/state/api/:ro"
+      - "${SUPERDIR}./configs/base/config.sh:/configs/base/config.sh:ro"
+      - "${SUPERDIR}./configs/plugins/spr-atlas:/configs/spr-atlas"
+
+# Note: if updating the bridge name, also update plugin.json
+# NetworkCapabilities.Interface and install.sh.
+networks:
+  atlasnet:
+    driver_opts:
+      com.docker.network.bridge.name: spr-atlas

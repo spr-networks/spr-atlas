@@ -1,0 +1,16 @@
+{
+  "Name": "spr-atlas",
+  "ComposeFilePath": "plugins/user/spr-atlas/docker-compose.yml",
+  "UnixPath": "/state/plugins/spr-atlas/socket",
+  "URI": "spr-atlas",
+  "HasUI": true,
+  "Icon": "BlocksIcon",
+  "SandboxedUI": false,
+  "InstallTokenPath": "/configs/plugins/spr-atlas/api-token",
+  "NetworkCapabilities": {
+    "Interface": "spr-atlas",
+    "Policies": ["wan", "dns"],
+    "Groups": []
+  },
+  "Enabled": true
+}
