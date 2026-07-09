@@ -119,6 +119,9 @@ export default function Plugin() {
       <ListHeader
         title="RIPE Atlas Probe"
         description="Software probe measuring internet connectivity for the RIPE Atlas network"
+        mark="ra"
+        status={connected ? 'Connected' : running ? 'Registering' : 'Stopped'}
+        statusAction={connected ? 'success' : running ? 'warning' : 'muted'}
       >
         <Button size="sm" variant="outline" onPress={() => refresh()}>
           <ButtonText>Refresh</ButtonText>
