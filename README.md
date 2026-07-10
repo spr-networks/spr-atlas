@@ -1,5 +1,7 @@
 # spr-atlas
 
+<img width="850" alt="spr-atlas UI preview" src="docs/screenshot.png" />
+
 Run a [RIPE Atlas](https://atlas.ripe.net/) **software probe** on your SPR
 router. RIPE Atlas is the RIPE NCC's global internet measurement network:
 hosting a probe contributes ping/traceroute/DNS/TLS measurements from your
@@ -25,6 +27,7 @@ survives container rebuilds and plugin upgrades.
 
 - RIPE Atlas software probe (latest production release, built from source,
   pinned by commit hash)
+- IPv4 startup reachability check for the plugin's IPv4-only container bridge
 - Registration card: probe public key + fingerprint, copy button, link to the
   RIPE application form
 - Status card: probe process state, uptime, controller connection heuristic,
@@ -129,8 +132,9 @@ the next start.
 ## Upstream project
 
 - Source: <https://github.com/RIPE-NCC/ripe-atlas-software-probe> (GPL-2.0 for
-  the probe/busybox code — built from unmodified upstream source at the pinned
-  commit; this plugin's own code is MIT)
+  the probe/busybox code — built from the pinned upstream commit with one
+  local patch that makes the pre-registration ping use IPv4; this plugin's own
+  code is MIT)
 - Docs: <https://atlas.ripe.net/docs/howtos/software-probes.html>
 - Registration: <https://atlas.ripe.net/apply/swprobe/>
 
@@ -140,7 +144,9 @@ Every build input is pinned in `reproducible.env`: base images by digest,
 apt packages via `snapshot.ubuntu.com`, the Go toolchain by version + sha256,
 and the RIPE Atlas source by release tag + **full commit hash**
 (`ATLAS_VERSION` / `ATLAS_COMMIT`, verified against `git rev-parse HEAD` and
-the upstream `VERSION` file at build time).
+the upstream `VERSION` file at build time). The local IPv4 startup-check patch
+is applied with `git apply --check`, so an incompatible upstream change fails
+the build instead of silently producing a different image.
 
 - `./build_docker_compose.sh` — reproducible local build (buildx +
   `rewrite-timestamp`, `SOURCE_DATE_EPOCH=0`)
