@@ -9,6 +9,7 @@ import {
   StatTile,
   KeyVal,
   StatusDot,
+  Toggle,
   ModalConfirm,
   Loading,
   Button,
@@ -21,6 +22,7 @@ import {
 } from '@spr-networks/plugin-ui'
 
 const PLUGIN_BASE = `/plugins/${api.pluginURI() || 'spr-atlas'}`
+const REGISTER_URL_FALLBACK = 'https://atlas.ripe.net/apply/swprobe/'
 
 const fmtUptime = (secs) => {
   if (!secs || secs < 0) return '—'
@@ -54,46 +56,121 @@ const copyText = (text) => {
   })
 }
 
+// Rough severity classification of a probe log line, for row tinting only.
+const logLevel = (line) => {
+  if (/\b(error|fatal|fail|failed|failure|refused|denied|cannot|unable)\b/i.test(line))
+    return 'error'
+  if (/\b(warn|warning|retry|retrying|timeout|timed out|disconnect)\b/i.test(line))
+    return 'warn'
+  return 'info'
+}
+
+const logColors = {
+  error: { light: '$red600', dark: '$red400' },
+  warn: { light: '$amber600', dark: '$amber400' },
+  info: { light: '$muted600', dark: '$muted400' }
+}
+
+const Step = ({ n, children }) => (
+  <HStack space="md" alignItems="flex-start">
+    <Box
+      w={22}
+      h={22}
+      mt="$0.5"
+      flexShrink={0}
+      borderRadius="$full"
+      alignItems="center"
+      justifyContent="center"
+      bg="$primary700"
+      sx={{ _dark: { bg: '$primary500' } }}
+    >
+      <Text size="2xs" color="$white" fontWeight="$bold">
+        {n}
+      </Text>
+    </Box>
+    <Text size="sm" color="$muted600" lineHeight="$sm" flexShrink={1} sx={{ _dark: { color: '$muted300' } }}>
+      {children}
+    </Text>
+  </HStack>
+)
+
+const MonoBlock = ({ children }) => (
+  <Box
+    p="$3"
+    borderRadius="$md"
+    borderWidth={1}
+    borderColor="$borderColorCardLight"
+    bg="$backgroundContentLight"
+    sx={{
+      _dark: {
+        bg: '$backgroundContentDark',
+        borderColor: '$borderColorCardDark'
+      }
+    }}
+  >
+    {children}
+  </Box>
+)
+
 export default function Plugin() {
   const alert = useAlert()
   const [status, setStatus] = useState(null)
   const [keyInfo, setKeyInfo] = useState(null)
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showRestart, setShowRestart] = useState(false)
-  const timerRef = useRef(null)
+  const [restarting, setRestarting] = useState(false)
+  const [autoRefresh, setAutoRefresh] = useState(true)
+  const autoRef = useRef(true)
+  autoRef.current = autoRefresh
+
+  const fetchLogs = () => {
+    api
+      .get(`${PLUGIN_BASE}/logs?lines=200`)
+      .then((lg) => setLogs(lg?.Lines || []))
+      .catch(() => {})
+  }
 
   const refresh = (initial = false) => {
     Promise.allSettled([
       api.get(`${PLUGIN_BASE}/status`),
-      api.get(`${PLUGIN_BASE}/key`),
-      api.get(`${PLUGIN_BASE}/logs?lines=200`)
-    ]).then(([st, key, lg]) => {
-      if (st.status === 'fulfilled') setStatus(st.value)
-      if (key.status === 'fulfilled') setKeyInfo(key.value)
-      if (lg.status === 'fulfilled') setLogs(lg.value?.Lines || [])
-      if (initial && st.status === 'rejected') {
-        alert.error('Failed to load probe status', st.reason)
+      api.get(`${PLUGIN_BASE}/key`)
+    ]).then(([st, key]) => {
+      if (st.status === 'fulfilled') {
+        setStatus(st.value)
+        setLoadError(false)
+      } else if (initial) {
+        setLoadError(true)
       }
+      if (key.status === 'fulfilled') setKeyInfo(key.value)
       setLoading(false)
     })
+    if (initial || autoRef.current) fetchLogs()
   }
 
   useEffect(() => {
     refresh(true)
-    timerRef.current = setInterval(refresh, 10000)
-    return () => clearInterval(timerRef.current)
+    const timer = setInterval(refresh, 10000)
+    return () => clearInterval(timer)
   }, [])
 
   const doRestart = () => {
     setShowRestart(false)
+    setRestarting(true)
     api
       .post(`${PLUGIN_BASE}/restart`)
       .then(() => {
         alert.success('Probe restarting')
-        setTimeout(refresh, 2000)
+        setTimeout(() => {
+          refresh()
+          setRestarting(false)
+        }, 2000)
       })
-      .catch((err) => alert.error('Failed to restart probe', err))
+      .catch((err) => {
+        setRestarting(false)
+        alert.error('Failed to restart probe', err)
+      })
   }
 
   const doCopyKey = () => {
@@ -101,6 +178,10 @@ export default function Plugin() {
     copyText(keyInfo.PublicKey)
       .then(() => alert.success('Public key copied to clipboard'))
       .catch(() => alert.error('Copy failed — select the key text manually'))
+  }
+
+  const openRegistration = () => {
+    window.open(keyInfo?.RegisterURL || REGISTER_URL_FALLBACK, '_blank')
   }
 
   if (loading) {
@@ -111,8 +192,55 @@ export default function Plugin() {
     )
   }
 
+  if (!status && loadError) {
+    return (
+      <Page>
+        <ListHeader
+          title="RIPE Atlas Probe"
+          description="Software probe measuring internet connectivity for the RIPE Atlas network"
+          mark="ra"
+        />
+        <Card>
+          <SectionHeader title="Backend unreachable" right={<StatusDot />} />
+          <Text size="sm" color="$muted500" mb="$4">
+            The plugin backend did not respond. It may still be starting — if
+            this persists, check that the spr-atlas container is running.
+          </Text>
+          <HStack>
+            <Button size="sm" onPress={() => refresh(true)}>
+              <ButtonText>Retry</ButtonText>
+            </Button>
+          </HStack>
+        </Card>
+      </Page>
+    )
+  }
+
   const running = !!status?.Running
   const connected = !!status?.Connected
+  const registered = !!status?.Registered || connected
+  const stateWord = !running
+    ? 'Stopped'
+    : connected
+    ? 'Connected'
+    : registered
+    ? 'Connecting'
+    : 'Awaiting approval'
+  const controller = status?.ControllerHost
+    ? status.ControllerHost + (status?.ControllerPort ? `:${status.ControllerPort}` : '')
+    : null
+
+  const restartButton = (
+    <Button
+      size="xs"
+      variant="outline"
+      action="negative"
+      isDisabled={restarting}
+      onPress={() => setShowRestart(true)}
+    >
+      <ButtonText>{restarting ? 'Restarting…' : 'Restart probe'}</ButtonText>
+    </Button>
+  )
 
   return (
     <Page>
@@ -120,119 +248,161 @@ export default function Plugin() {
         title="RIPE Atlas Probe"
         description="Software probe measuring internet connectivity for the RIPE Atlas network"
         mark="ra"
-        status={connected ? 'Connected' : running ? 'Registering' : 'Stopped'}
+        status={stateWord}
         statusAction={connected ? 'success' : running ? 'warning' : 'muted'}
-      >
-        <Button size="sm" variant="outline" onPress={() => refresh()}>
-          <ButtonText>Refresh</ButtonText>
-        </Button>
-      </ListHeader>
+      />
 
-      <Card>
-        <SectionHeader
-          title="Status"
-          right={<StatusDot online={running && connected} warn={running && !connected} />}
-        />
-        <HStack flexWrap="wrap" gap="$2">
-          <StatTile label="Probe" value={running ? 'Running' : 'Stopped'} />
-          <StatTile
-            label="Controller"
-            value={connected ? 'Connected' : status?.Registered ? 'Registering' : 'Not connected'}
-          />
-          <StatTile label="Uptime" value={fmtUptime(status?.UptimeSeconds)} mono />
-          <StatTile label="Version" value={status?.Version || '—'} mono />
-        </HStack>
-        <VStack space="sm" mt="$3">
-          {status?.ControllerHost ? (
-            <KeyVal label="Assigned controller" value={status.ControllerHost} mono />
-          ) : null}
-          {status?.LastExit && !running ? (
+      {!running ? (
+        <Card tone="warning">
+          <SectionHeader title="Probe stopped" right={restartButton} />
+          <Text size="sm" color="$muted600" mb="$1" sx={{ _dark: { color: '$muted300' } }}>
+            The probe process is not running. The supervisor restarts it
+            automatically; if it keeps exiting, the log below usually says why.
+          </Text>
+          {status?.LastExit ? (
             <KeyVal label="Last exit" value={status.LastExit} mono />
           ) : null}
-          <HStack justifyContent="flex-end">
-            <Button
-              size="xs"
-              variant="outline"
-              action="negative"
-              onPress={() => setShowRestart(true)}
-            >
-              <ButtonText>Restart Probe</ButtonText>
-            </Button>
-          </HStack>
-        </VStack>
-      </Card>
+        </Card>
+      ) : null}
+
+      {registered ? (
+        <>
+          <Card>
+            <SectionHeader title="Overview" right={running ? restartButton : null} />
+            <HStack space="sm" alignItems="center" mb="$4" flexWrap="wrap">
+              <StatusDot online={connected} warn={running && !connected} />
+              <Text
+                size="md"
+                fontWeight="$semibold"
+                color="$textLight900"
+                sx={{ _dark: { color: '$textDark50' } }}
+              >
+                {stateWord}
+              </Text>
+              {controller ? (
+                <Text size="sm" color="$muted500" sx={{ '@base': { fontFamily: 'monospace' } }}>
+                  {controller}
+                </Text>
+              ) : null}
+            </HStack>
+            <HStack flexWrap="wrap" gap="$2">
+              <StatTile label="Uptime" value={fmtUptime(status?.UptimeSeconds)} mono />
+              <StatTile label="Version" value={status?.Version || '—'} mono />
+              <StatTile label="Restarts" value={String(status?.Restarts ?? 0)} mono />
+            </HStack>
+            <VStack space="sm" mt="$4">
+              {controller ? (
+                <KeyVal label="Assigned controller" value={controller} mono />
+              ) : null}
+              {!connected ? (
+                <Text size="xs" color="$muted500">
+                  The probe reconnects to its controller on its own — no action
+                  needed unless this state persists for hours.
+                </Text>
+              ) : null}
+            </VStack>
+          </Card>
+
+          <Card>
+            <SectionHeader
+              title="Identity"
+              right={
+                keyInfo?.Exists ? (
+                  <Button size="xs" variant="outline" onPress={doCopyKey}>
+                    <ButtonText>Copy public key</ButtonText>
+                  </Button>
+                ) : null
+              }
+            />
+            <VStack space="sm">
+              <KeyVal
+                label="Fingerprint"
+                value={keyInfo?.Fingerprint || status?.Fingerprint || '—'}
+                mono
+              />
+              <Text size="xs" color="$muted500">
+                The probe key is its permanent identity and is already on file
+                with RIPE. You only need the public key again when contacting
+                Atlas support.
+              </Text>
+            </VStack>
+          </Card>
+        </>
+      ) : (
+        <Card>
+          <SectionHeader
+            title="Register this probe"
+            right={<StatusDot warn={running && !!keyInfo?.Exists} />}
+          />
+          <VStack space="md">
+            <Text size="sm" color="$muted500" lineHeight="$sm">
+              Hosting a probe contributes measurements from your network to the
+              RIPE Atlas platform and earns credits to run your own. One-time
+              setup:
+            </Text>
+            <Step n="1">Copy the probe public key below.</Step>
+            <Step n="2">
+              Submit it on the RIPE Atlas software probe application page —
+              sign in with a free RIPE NCC Access account.
+            </Step>
+            <Step n="3">
+              Wait for approval. The probe connects on its own — the status
+              here typically turns Connected within a few minutes of approval.
+              No restart needed; this page refreshes automatically.
+            </Step>
+            {keyInfo?.Exists ? (
+              <VStack space="md" mt="$1">
+                <MonoBlock>
+                  <Text size="xs" fontFamily="$mono" selectable>
+                    {keyInfo.PublicKey}
+                  </Text>
+                </MonoBlock>
+                <KeyVal label="Fingerprint" value={keyInfo.Fingerprint} mono />
+                <HStack space="md" flexWrap="wrap">
+                  <Button size="sm" onPress={doCopyKey}>
+                    <ButtonText>Copy public key</ButtonText>
+                  </Button>
+                  <Button size="sm" variant="outline" onPress={openRegistration}>
+                    <ButtonText>Open registration page</ButtonText>
+                  </Button>
+                </HStack>
+              </VStack>
+            ) : (
+              <Text size="sm" color="$muted500">
+                No probe key yet — it is generated on the plugin's first start.
+                Check the probe log below if this persists.
+              </Text>
+            )}
+          </VStack>
+        </Card>
+      )}
 
       <Card>
         <SectionHeader
-          title="Registration"
-          right={<StatusDot online={connected} warn={!connected && !!keyInfo?.Exists} />}
-        />
-        {!connected ? (
-          <VStack space="sm" mb="$3">
-            <Text size="sm" color="$muted500">
-              1. Copy the probe public key below.
-            </Text>
-            <Text size="sm" color="$muted500">
-              2. Submit it on the RIPE Atlas software probe application page
-              (atlas.ripe.net/apply/swprobe) with your RIPE NCC Access account.
-            </Text>
-            <Text size="sm" color="$muted500">
-              3. Once approved, the probe connects automatically — no restart
-              needed. Status above turns green when connected.
-            </Text>
-          </VStack>
-        ) : (
-          <Text size="sm" color="$muted500" mb="$3">
-            This probe is registered and connected to a RIPE Atlas controller.
-          </Text>
-        )}
-        {keyInfo?.Exists ? (
-          <VStack space="md">
-            <Box
-              p="$3"
-              borderRadius="$md"
-              borderWidth={1}
-              borderColor="$borderColorCardLight"
-              bg="$backgroundContentLight"
-              sx={{
-                _dark: {
-                  bg: '$backgroundContentDark',
-                  borderColor: '$borderColorCardDark'
-                }
-              }}
-            >
-              <Text size="xs" fontFamily="$mono" selectable>
-                {keyInfo.PublicKey}
+          title="Probe log"
+          count={logs.length}
+          right={
+            <HStack space="sm" alignItems="center">
+              <Text size="xs" color="$muted500">
+                Auto-refresh
               </Text>
-            </Box>
-            <KeyVal label="Fingerprint" value={keyInfo.Fingerprint} mono />
-            <HStack space="md" flexWrap="wrap">
-              <Button size="sm" onPress={doCopyKey}>
-                <ButtonText>Copy Public Key</ButtonText>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onPress={() => window.open(keyInfo.RegisterURL || 'https://atlas.ripe.net/apply/swprobe/', '_blank')}
-              >
-                <ButtonText>Open Registration Page</ButtonText>
-              </Button>
+              <Toggle
+                value={autoRefresh}
+                onPress={() => {
+                  const next = !autoRefresh
+                  setAutoRefresh(next)
+                  if (next) fetchLogs()
+                }}
+                label="Auto-refresh probe log"
+              />
             </HStack>
-          </VStack>
-        ) : (
-          <Text size="sm" color="$muted500">
-            No probe key yet — it is generated on the plugin's first start.
-            Check the logs below if this persists.
-          </Text>
-        )}
-      </Card>
-
-      <Card>
-        <SectionHeader title="Probe Log" count={logs.length} />
+          }
+        />
         {logs.length ? (
           <ScrollView
             maxHeight={320}
-            p="$3"
+            px="$3"
+            py="$2"
             borderRadius="$md"
             borderWidth={1}
             borderColor="$borderColorCardLight"
@@ -244,12 +414,23 @@ export default function Plugin() {
               }
             }}
           >
-            <VStack space="xs">
-              {logs.map((line, i) => (
-                <Text key={i} size="xs" fontFamily="$mono">
-                  {line}
-                </Text>
-              ))}
+            <VStack>
+              {logs.map((line, i) => {
+                const level = logLevel(line)
+                return (
+                  <Text
+                    key={i}
+                    size="xs"
+                    py="$0.5"
+                    fontFamily="$mono"
+                    lineHeight="$sm"
+                    color={logColors[level].light}
+                    sx={{ _dark: { color: logColors[level].dark } }}
+                  >
+                    {line}
+                  </Text>
+                )
+              })}
             </VStack>
           </ScrollView>
         ) : (
@@ -257,6 +438,9 @@ export default function Plugin() {
             No log output captured yet.
           </Text>
         )}
+        <Text size="2xs" color="$muted400" mt="$2">
+          Sanitized tail — control characters stripped, key material redacted.
+        </Text>
       </Card>
 
       <ModalConfirm
@@ -264,7 +448,7 @@ export default function Plugin() {
         onClose={() => setShowRestart(false)}
         onConfirm={doRestart}
         title="Restart the probe?"
-        message="Running measurements are interrupted; the probe reconnects to its controller automatically. The probe key is not affected."
+        message="Measurements in flight are dropped. The probe reconnects to its controller automatically; the probe key is not affected."
         confirmText="Restart"
         destructive
       />
