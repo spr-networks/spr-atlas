@@ -5,6 +5,7 @@
   "URI": "spr-atlas",
   "HasUI": true,
   "Icon": "Radar",
+  "HasTopology": true,
   "SandboxedUI": false,
   "InstallTokenPath": "/configs/plugins/spr-atlas/api-token",
   "NetworkCapabilities": {

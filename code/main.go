@@ -115,6 +115,7 @@ func main() {
 	mux.HandleFunc("GET /key", handleGetKey)
 	mux.HandleFunc("POST /restart", handleRestart(sup))
 	mux.HandleFunc("GET /logs", handleGetLogs(sup))
+	mux.HandleFunc("GET /topology", handleGetTopology)
 	mux.Handle("/", spaHandler{staticPath: "/ui", indexPath: "index.html"})
 
 	os.Remove(UNIX_PLUGIN_LISTENER)
