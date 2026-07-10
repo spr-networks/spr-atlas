@@ -11,6 +11,7 @@ set +a
 
 ATLAS_USER=ripe-atlas
 ATLAS_ETC=/etc/ripe-atlas
+ATLAS_CONFIG="$ATLAS_ETC/config.txt"
 ATLAS_SPOOL=/var/spool/ripe-atlas
 ATLAS_RUN=/run/ripe-atlas
 STATE_DIR=/state/plugins/spr-atlas
@@ -23,6 +24,16 @@ if [ ! -f "$ATLAS_ETC/mode" ]; then
     cp -a /usr/share/ripe-atlas-defaults/. "$ATLAS_ETC/"
 fi
 
+# Installing this dedicated plugin is an explicit opt-in to hosting an Atlas
+# probe, including RIPE's optional interface traffic-statistics reporting.
+# Enforce the setting on every start so existing installations also receive it,
+# while preserving any other supported runtime options in config.txt.
+if grep -q '^[[:space:]]*RXTXRPT=' "$ATLAS_CONFIG" 2>/dev/null; then
+    sed -i 's/^[[:space:]]*RXTXRPT=.*/RXTXRPT=yes/' "$ATLAS_CONFIG"
+else
+    printf 'RXTXRPT=yes\n' >> "$ATLAS_CONFIG"
+fi
+
 # Probe identity: an ssh keypair generated locally on first start. The ADMIN
 # registers the PUBLIC key at https://atlas.ripe.net/apply/swprobe/ (shown in
 # the plugin UI). The private key never leaves $STATE_DIR/etc.
@@ -31,6 +42,7 @@ if [ ! -f "$ATLAS_ETC/probe_key" ]; then
 fi
 chmod 600 "$ATLAS_ETC/probe_key"
 chmod 644 "$ATLAS_ETC/probe_key.pub"
+chmod 644 "$ATLAS_CONFIG"
 
 # Runtime dirs (equivalent of upstream's tmpfiles.d/ripe-atlas.conf).
 mkdir -p "$ATLAS_RUN/pids" "$ATLAS_RUN/status"

@@ -1,0 +1,13 @@
+diff --git a/bin/ripe-atlas.in b/bin/ripe-atlas.in
+index 2e5f0a2..6e1d2c1 100755
+--- a/bin/ripe-atlas.in
++++ b/bin/ripe-atlas.in
+@@ -234,7 +234,7 @@ do
+ 		echo "$ATLAS_STATUS/reginit.vol does not exist try new reg"
+ 		UPTIME=`onlyuptime`
+ 		$SET_LEDS_CMD net-try
+-		if evping -A "9017" -e -O $DATA_NEW_DIR/simpleping "U$UPTIME.$SOS_ID.sos.atlas.ripe.net"
++		if evping -4 -A "9017" -e -O $DATA_NEW_DIR/simpleping "U$UPTIME.$SOS_ID.sos.atlas.ripe.net"
+ 		then
+ 			echo "Ping works"
+ 			$SET_LEDS_CMD net-ok

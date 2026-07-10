@@ -27,6 +27,7 @@ survives container rebuilds and plugin upgrades.
 
 - RIPE Atlas software probe (latest production release, built from source,
   pinned by commit hash)
+- Interface traffic-statistics reporting explicitly enabled (`RXTXRPT=yes`)
 - IPv4 startup reachability check for the plugin's IPv4-only container bridge
 - Registration card: probe public key + fingerprint, copy button, link to the
   RIPE application form
@@ -92,7 +93,10 @@ probe is unregistered or down the graph is just the root anchor.
 
 ## Configuration
 
-There is nothing to configure for a standard probe. Probe state lives in:
+There is nothing to configure for a standard probe. Installing the plugin is
+treated as explicit consent to RIPE Atlas interface traffic-statistics
+reporting, so startup persistently sets `RXTXRPT=yes` in
+`/etc/ripe-atlas/config.txt`. Probe state lives in:
 
 | Host path                              | In container            | Purpose                                    |
 | -------------------------------------- | ----------------------- | ------------------------------------------ |
@@ -126,6 +130,8 @@ the next start.
   validates it looks like an OpenSSH public key before serving. Log output is
   sanitized (control characters stripped, key material redacted) before it is
   stored or served.
+- **Traffic-statistics opt-in.** Installing this dedicated probe plugin enables
+  RIPE Atlas interface traffic-statistics reporting with `RXTXRPT=yes`.
 - The probe's built-in telnetd binds `127.0.0.1:2023` *inside* the container
   namespace only (upstream behaviour; unreachable from anywhere else).
 

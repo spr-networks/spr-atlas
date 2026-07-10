@@ -66,6 +66,14 @@ RUN set -eux; \
     git checkout --detach "${ATLAS_COMMIT}"; \
     test "$(git rev-parse HEAD)" = "${ATLAS_COMMIT}"; \
     test "$(cat VERSION)" = "${ATLAS_VERSION}"
+# This container bridge is IPv4-only. Upstream's evping defaults to IPv6 when
+# neither -4 nor -6 is supplied, so make only the pre-registration reachability
+# check explicit about IPv4. Scheduled Atlas measurements are not changed.
+COPY patches/0001-use-ipv4-for-registration-ping.patch /tmp/atlas-patches/
+RUN set -eux; cd /src/atlas; \
+    git apply --check /tmp/atlas-patches/0001-use-ipv4-for-registration-ping.patch; \
+    git apply /tmp/atlas-patches/0001-use-ipv4-for-registration-ping.patch; \
+    grep -F 'evping -4 -A "9017"' bin/ripe-atlas.in
 # Build layout matches the upstream Debian packaging (FHS, >= 5090):
 #   /usr/sbin/ripe-atlas               main loop
 #   /usr/libexec/ripe-atlas/           scripts + measurement busybox applets
