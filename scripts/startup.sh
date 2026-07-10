@@ -47,8 +47,19 @@ chmod 644 "$ATLAS_CONFIG"
 # Runtime dirs (equivalent of upstream's tmpfiles.d/ripe-atlas.conf).
 mkdir -p "$ATLAS_RUN/pids" "$ATLAS_RUN/status"
 mkdir -p "$ATLAS_SPOOL/data/new" "$ATLAS_SPOOL/data/out/ooq" "$ATLAS_SPOOL/data/out/ooq10" "$ATLAS_SPOOL/data/oneoff"
-mkdir -p "$ATLAS_SPOOL/crons/main" "$ATLAS_SPOOL/crons/oneoff"
+mkdir -p "$ATLAS_SPOOL/crons/main"
 for i in $(seq 2 20); do mkdir -p "$ATLAS_SPOOL/crons/$i"; done
+
+# eooqd consumes crons/oneoff as a queue file and temporarily renames it to
+# oneoff.curr. Older plugin images incorrectly created both paths as directories
+# in the persistent spool, causing an endless "unlink failed: Is a directory"
+# loop. Remove only those legacy directories when empty; never delete queue data.
+for queue_path in "$ATLAS_SPOOL/crons/oneoff" "$ATLAS_SPOOL/crons/oneoff.curr"; do
+    if [ -d "$queue_path" ] && ! rmdir "$queue_path"; then
+        echo "Refusing to remove non-empty Atlas queue directory: $queue_path" >&2
+        exit 1
+    fi
+done
 
 # The probe runs unprivileged; the bind-mounted dirs are created root-owned
 # by docker, so fix ownership every start.
