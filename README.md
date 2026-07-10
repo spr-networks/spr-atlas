@@ -72,7 +72,7 @@ All endpoints are served over the plugin unix socket
 
 | Method | Path       | Description                                                                                             |
 | ------ | ---------- | ------------------------------------------------------------------------------------------------------- |
-| GET    | `/status`  | Probe state: `Running`, `PID`, `UptimeSeconds`, `Restarts`, `Registered`, `Connected`, `ControllerHost`, `KeyExists`, `Fingerprint`, `Version` |
+| GET    | `/status`  | Probe state: `Running`, `PID`, `ProbeID`, `UptimeSeconds`, `Restarts`, `Registered`, `Connected`, `ControllerHost`, `KeyExists`, `Fingerprint`, `Version` |
 | GET    | `/key`     | Probe **public** key + SHA256 fingerprint + registration URL (public keys are safe to show)              |
 | POST   | `/restart` | Restart the probe process tree                                                                           |
 | GET    | `/logs`    | Sanitized tail of the probe log, `{"Lines": [...]}`; optional `?lines=1..1000` (default 200)            |

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -115,6 +116,7 @@ type ProbeStatus struct {
 	Connected      bool   // Registered + ssh keepalive session to controller alive
 	ControllerHost string `json:",omitempty"`
 	ControllerPort string `json:",omitempty"`
+	ProbeID        int    `json:",omitempty"`
 	KeyExists      bool
 	Fingerprint    string `json:",omitempty"`
 	Version        string `json:",omitempty"`
@@ -137,6 +139,32 @@ func ParseControllerInfo(r io.Reader) (host string, port string) {
 		}
 	}
 	return host, port
+}
+
+// ParseProbeID extracts the numeric RIPE Atlas probe ID from the successful
+// registration reply ("PROBE_ID <id>").
+func ParseProbeID(r io.Reader) int {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 2 || fields[0] != "PROBE_ID" {
+			continue
+		}
+		id, err := strconv.Atoi(fields[1])
+		if err == nil && id > 0 {
+			return id
+		}
+	}
+	return 0
+}
+
+func probeID() int {
+	f, err := os.Open(StatusDir + "/reg_init_reply.txt")
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	return ParseProbeID(f)
 }
 
 // pidAlive reports whether the pid read from a probe .vol file is running.
@@ -405,6 +433,7 @@ func (s *Supervisor) Status() ProbeStatus {
 	s.mtx.Unlock()
 
 	st.Registered, st.Connected, st.ControllerHost, st.ControllerPort = probeConnectionState()
+	st.ProbeID = probeID()
 	st.Version = probeVersion()
 	if key, err := ReadPublicKey(ProbeKeyPubFile); err == nil {
 		st.KeyExists = true

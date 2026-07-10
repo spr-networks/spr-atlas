@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { Link, LinkText } from '@gluestack-ui/themed'
 import {
   api,
   useAlert,
@@ -23,6 +24,8 @@ import {
 
 const PLUGIN_BASE = `/plugins/${api.pluginURI() || 'spr-atlas'}`
 const REGISTER_URL_FALLBACK = 'https://atlas.ripe.net/apply/swprobe/'
+const probeOverviewURL = (probeID) =>
+  `https://atlas.ripe.net/probes/${probeID}/overview`
 
 const fmtUptime = (secs) => {
   if (!secs || secs < 0) return '—'
@@ -229,6 +232,9 @@ export default function Plugin() {
   const controller = status?.ControllerHost
     ? status.ControllerHost + (status?.ControllerPort ? `:${status.ControllerPort}` : '')
     : null
+  const probeID = Number.isInteger(status?.ProbeID) && status.ProbeID > 0
+    ? status.ProbeID
+    : null
 
   const restartButton = (
     <Button
@@ -315,6 +321,14 @@ export default function Plugin() {
               }
             />
             <VStack space="sm">
+              {probeID ? (
+                <VStack space="xs">
+                  <KeyVal label="Probe ID" value={String(probeID)} mono />
+                  <Link isExternal href={probeOverviewURL(probeID)}>
+                    <LinkText>Open probe {probeID} on RIPE Atlas</LinkText>
+                  </Link>
+                </VStack>
+              ) : null}
               <KeyVal
                 label="Fingerprint"
                 value={keyInfo?.Fingerprint || status?.Fingerprint || '—'}

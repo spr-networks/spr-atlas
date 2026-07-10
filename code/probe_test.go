@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -70,6 +71,45 @@ func TestParseControllerInfoEmpty(t *testing.T) {
 	host, port := ParseControllerInfo(strings.NewReader(""))
 	if host != "" || port != "" {
 		t.Errorf("expected empty, got %q %q", host, port)
+	}
+}
+
+func TestParseProbeID(t *testing.T) {
+	reply := `CONTROLLER_1_HOST ctr-ams01.atlas.ripe.net
+PROBE_ID 1016551
+CONTROLLER_1_PORT 443
+`
+	if got := ParseProbeID(strings.NewReader(reply)); got != 1016551 {
+		t.Fatalf("probe ID = %d, want 1016551", got)
+	}
+}
+
+func TestParseProbeIDRejectsInvalidValues(t *testing.T) {
+	for _, reply := range []string{
+		"",
+		"PROBE_ID\n",
+		"PROBE_ID nope\n",
+		"PROBE_ID 0\n",
+		"PROBE_ID -1\n",
+	} {
+		if got := ParseProbeID(strings.NewReader(reply)); got != 0 {
+			t.Errorf("ParseProbeID(%q) = %d, want 0", reply, got)
+		}
+	}
+}
+
+func TestStatusIncludesProbeID(t *testing.T) {
+	originalStatusDir := StatusDir
+	StatusDir = t.TempDir()
+	t.Cleanup(func() { StatusDir = originalStatusDir })
+
+	if err := os.WriteFile(StatusDir+"/reg_init_reply.txt", []byte("PROBE_ID 1016551\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	status := NewSupervisor("unused").Status()
+	if status.ProbeID != 1016551 {
+		t.Fatalf("status probe ID = %d, want 1016551", status.ProbeID)
 	}
 }
 
