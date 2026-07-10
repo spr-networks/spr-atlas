@@ -29,8 +29,10 @@ survives container rebuilds and plugin upgrades.
   RIPE application form
 - Status card: probe process state, uptime, controller connection heuristic,
   assigned controller, firmware version
-- Sanitized probe log tail in the UI
-- One-click probe restart
+- Sanitized probe log tail in the UI (severity-tinted, optional auto-refresh)
+- Probe restart behind a confirmation dialog
+- Contributes the assigned Atlas controller to SPR's topology view
+  (`HasTopology` + `GET /topology`)
 - Probe identity persisted under `state/plugins/spr-atlas/` (survives
   rebuilds)
 
@@ -70,10 +72,20 @@ All endpoints are served over the plugin unix socket
 | GET    | `/key`     | Probe **public** key + SHA256 fingerprint + registration URL (public keys are safe to show)              |
 | POST   | `/restart` | Restart the probe process tree                                                                           |
 | GET    | `/logs`    | Sanitized tail of the probe log, `{"Lines": [...]}`; optional `?lines=1..1000` (default 200)            |
+| GET    | `/topology` | Plugin topology graph `{"Nodes": [...], "Edges": [...]}` merged into SPR's topology view (see below)   |
 
 `Connected` is a heuristic from the probe's own state files: registration
 state present (`reginit.vol`) and the ssh keepalive session to the controller
 alive (`con_keep_pid.vol`).
+
+### Topology
+
+The plugin sets `HasTopology` in `plugin.json` and contributes a small graph
+to SPR's router topology view: a root anchor node (`ConnType: "atlas"`) plus,
+once the probe is registered, one node for the assigned RIPE Atlas controller
+(`Kind: "controller"`, named after the controller host, online while the
+keepalive ssh session is up) connected to root by a `wan`-layer edge. When the
+probe is unregistered or down the graph is just the root anchor.
 
 ## Configuration
 
