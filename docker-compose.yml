@@ -41,5 +41,6 @@ services:
 # NetworkCapabilities.Interface and install.sh.
 networks:
   atlasnet:
+    name: spr-atlas
     driver_opts:
       com.docker.network.bridge.name: spr-atlas

@@ -4,7 +4,7 @@
   "UnixPath": "/state/plugins/spr-atlas/socket",
   "URI": "spr-atlas",
   "HasUI": true,
-  "Icon": "BlocksIcon",
+  "Icon": "Radar",
   "SandboxedUI": false,
   "InstallTokenPath": "/configs/plugins/spr-atlas/api-token",
   "NetworkCapabilities": {
