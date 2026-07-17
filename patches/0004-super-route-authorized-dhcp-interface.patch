@@ -1,0 +1,70 @@
+diff --git a/api/code/firewall.go b/api/code/firewall.go
+--- a/api/code/firewall.go
++++ b/api/code/firewall.go
+@@ -2564,6 +2564,9 @@ var RecentDHCPIface = map[string]string{}
+ 
+ func notifyFirewallDHCP(device DeviceEntry, iface string) {
+ 	addLanInterface(iface)
++
++	FWmtx.Lock()
++	defer FWmtx.Unlock()
+ 
+ 	if device.MAC != "" {
+ 		RecentDHCPIface[device.MAC] = iface
+@@ -2575,9 +2578,6 @@ func notifyFirewallDHCP(device DeviceEntry, iface string) {
+ 
+ 	// for wireguard clients only below
+ 	cur_time := time.Now().Unix()
+-
+-	FWmtx.Lock()
+-	defer FWmtx.Unlock()
+ 
+ 	RecentDHCPWG[device.WGPubKey] = cur_time
+ }
+@@ -3240,18 +3240,19 @@ func dynamicRouteLoop() {
+ 			//for plugins to have network state information
+ 			newIfaceMap := map[string]string{}
+ 
++			// A successful DHCP request is authoritative for the interface where
++			// the device was most recently observed. This covers Wi-Fi peers as
++			// well as authorized virtual and wired devices.
++			recentDHCPIfaces := map[string]string{}
+ 			FWmtx.Lock()
+-
+-			//if a wifi device is active, place that as priority
++			for mac, iface := range RecentDHCPIface {
++				recentDHCPIfaces[mac] = iface
++				suggested_device[mac] = iface
++			}
+ 			for mac, iface := range wifi_peers {
+-				dhcp_iface, exists := RecentDHCPIface[mac]
+-				if !exists {
++				if _, exists := suggested_device[mac]; !exists {
+ 					suggested_device[mac] = iface
+-				} else {
+-					//prioritize the interface that last got a DHCP for the MAC
+-					suggested_device[mac] = dhcp_iface
+ 				}
+-
+ 			}
+ 			FWmtx.Unlock()
+ 
+@@ -3297,8 +3298,16 @@ func dynamicRouteLoop() {
+ 					// Verify the interface is a valid downlink
+ 					isValidDownlink := slices.Contains(downlinks, baseIface)
+ 
+-					// If it's not a downlink, was not wg0, or a wlan
+-					if !isValidDownlink {
++					// An interface that most recently delivered an authorized
++					// DHCP request is also a valid device link. This permits TAP
++					// devices without making them general SPR downlinks.
++					recentIface, hasRecentDHCP := recentDHCPIfaces[ident]
++					isAuthorizedDHCPLink := hasRecentDHCP &&
++						recentIface == new_iface &&
++						isValidIface(new_iface)
++
++					// If it's not a downlink, recent DHCP link, wg0, or a wlan
++					if !isValidDownlink && !isAuthorizedDHCPLink {
+ 						// Interface is not valid, treat as if not found
+ 						exists = false
+ 						new_iface = ""

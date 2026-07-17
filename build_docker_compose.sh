@@ -29,16 +29,20 @@ if ! which docker-compose > /dev/null 2>&1; then
 fi
 
 if docker --help | grep -q buildx; then
+  BUILDER_NAME="${SPR_ATLAS_BUILDER:-super-builder}"
   # Recreate super-builder if its BuildKit image doesn't match BUILDKIT_REF.
-  if docker buildx inspect super-builder >/dev/null 2>&1; then
+  if [ "$BUILDER_NAME" = "super-builder" ] &&
+     docker buildx inspect super-builder >/dev/null 2>&1; then
     CURRENT_BUILDKIT=$(docker buildx inspect super-builder \
       | sed -n 's/.*image="\([^"]*\)".*/\1/p' | head -1)
     if [ -n "${BUILDKIT_REF:-}" ] && [ "$CURRENT_BUILDKIT" != "${BUILDKIT_REF}" ]; then
       docker buildx rm super-builder
     fi
   fi
-  docker buildx create --name super-builder --driver docker-container \
-    --driver-opt "image=${BUILDKIT_REF}" 2>/dev/null || true
+  if [ "$BUILDER_NAME" = "super-builder" ]; then
+    docker buildx create --name super-builder --driver docker-container \
+      --driver-opt "image=${BUILDKIT_REF}" 2>/dev/null || true
+  fi
   # Always export with rewrite-timestamp; map --load/--push onto the exporter.
   OUTPUT="type=docker,rewrite-timestamp=true"
   ARGS=()
@@ -50,7 +54,7 @@ if docker --help | grep -q buildx; then
     esac
   done
   # ${ARGS[@]+...} guards the empty-array expansion under `set -u` on bash 3.2 (macOS).
-  docker buildx bake --builder super-builder --file docker-compose.yml \
+  docker buildx bake --builder "$BUILDER_NAME" --file docker-compose.yml \
     "${BAKE_SET[@]}" --set "*.output=${OUTPUT}" ${ARGS[@]+"${ARGS[@]}"}
 else
   # Fallback (no buildx): NOT bit-for-bit (docker exporter can't rewrite timestamps).

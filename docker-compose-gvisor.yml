@@ -9,9 +9,10 @@ services:
       file: docker-compose.yml
       service: spr-atlas
     # RIPE Atlas opens raw ICMP sockets. The dedicated runtime must be
-    # configured with --net-raw=true and --host-uds=create; cap_add: NET_RAW
-    # in the base service still limits the capability at the container
-    # boundary. `all` also works, but grants unnecessary access to host UDSes.
+    # configured with --net-raw=true, --host-uds=create and the cgroup driver
+    # used by Docker; cap_add: NET_RAW in the base service still limits the
+    # capability at the container boundary. `all` also works for host UDSes,
+    # but grants unnecessary access.
     runtime: ${ATLAS_RUNTIME:-runsc-net-raw}
 
 # `extends` imports service-level network membership, not top-level network

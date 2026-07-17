@@ -1,8 +1,9 @@
 // spr-atlas: SPR plugin wrapping the RIPE Atlas software probe.
 //
-// Serves a JSON API + the bundled UI over the plugin unix socket at
-// /state/plugins/spr-atlas/socket (proxied by SPR under /plugins/spr-atlas/),
-// and supervises the probe main loop (/scripts/run-probe.sh).
+// Serves a JSON API + bundled UI over a Unix socket and supervises the probe
+// main loop (/scripts/run-probe.sh). In krun mode, the spr-krun-plugin base
+// maps this guest-local socket to vsock; libkrun maps vsock to SPR's
+// host-visible Unix socket.
 package main
 
 import (
@@ -17,7 +18,7 @@ import (
 	"syscall"
 )
 
-var UNIX_PLUGIN_LISTENER = "/state/plugins/spr-atlas/socket"
+const unixPluginListener = "/state/plugins/spr-atlas/api/socket"
 
 // RegisterURL is where the admin submits the probe public key.
 const RegisterURL = "https://atlas.ripe.net/apply/swprobe/"
@@ -107,6 +108,34 @@ func logRequest(handler http.Handler) http.Handler {
 	})
 }
 
+func listenUnix(path string) (net.Listener, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
+		return nil, err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	listener, err := net.Listen("unix", path)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(path, 0770); err != nil {
+		log.Printf("socket chmod unavailable for %s: %v", path, err)
+	}
+	return listener, nil
+}
+
+func pluginListener() (net.Listener, error) {
+	path := os.Getenv("SPR_KRUN_PLUGIN_SOCKET")
+	if path == "" {
+		path = unixPluginListener
+	}
+	if !filepath.IsAbs(path) {
+		return nil, fmt.Errorf("SPR_KRUN_PLUGIN_SOCKET must be an absolute path")
+	}
+	return listenUnix(path)
+}
+
 func main() {
 	// The plugin socket is created on a host bind mount. Some filesystem
 	// proxies cannot chmod an existing UDS, so request restrictive creation
@@ -123,17 +152,9 @@ func main() {
 	mux.HandleFunc("GET /topology", handleGetTopology)
 	mux.Handle("/", spaHandler{staticPath: "/ui", indexPath: "index.html"})
 
-	os.Remove(UNIX_PLUGIN_LISTENER)
-	listener, err := net.Listen("unix", UNIX_PLUGIN_LISTENER)
+	listener, err := pluginListener()
 	if err != nil {
-		log.Fatalf(
-			"listen on plugin socket %s failed (gVisor requires --host-uds=create or --host-uds=all): %v",
-			UNIX_PLUGIN_LISTENER,
-			err,
-		)
-	}
-	if err := os.Chmod(UNIX_PLUGIN_LISTENER, 0770); err != nil {
-		log.Println("socket chmod unavailable; host runtime controls proxy permissions:", err)
+		log.Fatalf("listen on plugin API failed: %v", err)
 	}
 
 	sup.Start()

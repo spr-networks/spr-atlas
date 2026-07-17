@@ -6,7 +6,20 @@ CONTAINER="${ATLAS_CONTAINER:-spr-atlas}"
 EXPECTED_RUNTIME="${ATLAS_RUNTIME:-runsc-net-raw}"
 SUPERDIR="${1:-${SUPERDIR:-/home/spr/super/}}"
 STATE_DIR="${SUPERDIR%/}/state/plugins/spr-atlas"
-SOCKET="${STATE_DIR}/socket"
+SOCKET="${STATE_DIR}/api/socket"
+
+if [ "$(uname -m)" = "aarch64" ] &&
+   [ "$(getconf PAGESIZE)" -eq 16384 ]; then
+    echo "This ARM64 host uses unsupported 16 KiB pages; runsc cannot start." >&2
+    exit 1
+fi
+
+if [ -r /sys/fs/cgroup/cgroup.controllers ] &&
+   ! grep -qw memory /sys/fs/cgroup/cgroup.controllers; then
+    echo "Host cgroup v2 is missing its mandatory memory controller." >&2
+    echo "Enable cgroup_enable=memory cgroup_memory=1 at boot, then reboot." >&2
+    exit 1
+fi
 
 RUNNING="$(docker inspect --format '{{.State.Running}}' "$CONTAINER")"
 RUNTIME="$(docker inspect --format '{{.HostConfig.Runtime}}' "$CONTAINER")"

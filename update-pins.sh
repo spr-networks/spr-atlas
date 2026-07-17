@@ -13,6 +13,7 @@ NODE_TAG=node:18
 DOCKERFILE_TAG=docker/dockerfile:1
 BUILDKIT_TAG=moby/buildkit:buildx-stable-1
 CONTAINER_TEMPLATE_TAG=ghcr.io/spr-networks/container_template:latest
+SPR_KRUN_PLUGIN_TAG=ghcr.io/spr-networks/spr-krun-plugin:latest
 GO_MINOR=1.25
 ATLAS_GIT=https://github.com/RIPE-NCC/ripe-atlas-software-probe.git
 
@@ -25,6 +26,7 @@ NODE_REF="${NODE_TAG}@$(mdigest "$NODE_TAG")"
 DOCKERFILE_SYNTAX="${DOCKERFILE_TAG}@$(mdigest "$DOCKERFILE_TAG")"
 BUILDKIT_REF="${BUILDKIT_TAG}@$(mdigest "$BUILDKIT_TAG")"
 CONTAINER_TEMPLATE_REF="${CONTAINER_TEMPLATE_TAG%:*}@$(mdigest "$CONTAINER_TEMPLATE_TAG")"
+SPR_KRUN_PLUGIN_REF="${SPR_KRUN_PLUGIN_TAG%:*}@$(mdigest "$SPR_KRUN_PLUGIN_TAG")"
 UBUNTU_SNAPSHOT="${UBUNTU_SNAPSHOT:-$(grep -E '^UBUNTU_SNAPSHOT=' reproducible.env | cut -d= -f2)}"
 code=$(curl -fsS -o /dev/null -w '%{http_code}' "https://snapshot.ubuntu.com/ubuntu/${UBUNTU_SNAPSHOT}/dists/noble/InRelease" || true)
 [ "$code" = "200" ] || { echo "snapshot ${UBUNTU_SNAPSHOT} not valid (HTTP $code)" >&2; exit 1; }
@@ -63,6 +65,7 @@ NODE_REF=${NODE_REF}
 DOCKERFILE_SYNTAX=${DOCKERFILE_SYNTAX}
 BUILDKIT_REF=${BUILDKIT_REF}
 CONTAINER_TEMPLATE_REF=${CONTAINER_TEMPLATE_REF}
+SPR_KRUN_PLUGIN_REF=${SPR_KRUN_PLUGIN_REF}
 UBUNTU_SNAPSHOT=${UBUNTU_SNAPSHOT}
 GO_VERSION=${GO_VERSION}
 GO_SHA256_AMD64=${GO_SHA256_AMD64}

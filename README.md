@@ -11,9 +11,18 @@ network vantage point and earns you credits to run your own measurements.
 
 The plugin builds the official
 [RIPE-NCC/ripe-atlas-software-probe](https://github.com/RIPE-NCC/ripe-atlas-software-probe)
-from source at a pinned release, runs it under gVisor on its own `spr-atlas`
-bridge, and adds a small Go backend + React UI (rendered by SPR as an iframe
-under Plugins) for status, registration and logs.
+from source at a pinned release, runs it in a KVM microVM using
+[libkrun](https://github.com/containers/libkrun), and adds a small Go backend
++ React UI (rendered by SPR as an iframe under Plugins) for status,
+registration and logs. The VM's virtio-net device is backed by host TAP
+`katlas0`; SPR CoreDHCP assigns the stable VM MAC a normal tiny-subnet lease
+and applies the declared `wan` + `dns` device policies. The microVM boots the
+full Linux kernel bundled by
+[libkrunfw](https://github.com/containers/libkrunfw), independently of the
+host's page size. Its final image inherits
+[`spr-krun-plugin`](https://github.com/spr-networks/spr-krun-plugin), which supplies the reusable
+minimal vsock-to-Unix bridge entrypoint. libkrun's embedded init obtains the
+SPR DHCP lease before Atlas starts.
 
 On first start the probe generates an RSA ssh keypair — its permanent
 identity. You (the admin) register the **public** key at
@@ -28,7 +37,7 @@ survives container rebuilds and plugin upgrades.
 - RIPE Atlas software probe (latest production release, built from source,
   pinned by commit hash)
 - Interface traffic-statistics reporting explicitly enabled (`RXTXRPT=yes`)
-- IPv4 startup reachability check for the plugin's IPv4-only container bridge
+- IPv4 startup reachability check over the SPR DHCP-backed TAP
 - Registration card: probe public key + fingerprint, copy button, link to the
   RIPE application form
 - Status card: probe process state, uptime, controller connection heuristic,
@@ -42,60 +51,97 @@ survives container rebuilds and plugin upgrades.
 
 ## UI Setup
 
-1. In the SPR UI, go to **Plugins** → `+ New Plugin` and add
+1. Install the host's `krun-atlas` runtime once, as described under
+   [Command Line Setup](#command-line-setup).
+2. In the SPR UI, go to **Plugins** → `+ New Plugin` and add
    `https://github.com/spr-networks/spr-atlas`.
-2. Open **spr-atlas** at the bottom of the left-hand menu.
-3. Copy the probe public key from the Registration card and submit it at
+3. Open **spr-atlas** at the bottom of the left-hand menu.
+4. Copy the probe public key from the Registration card and submit it at
    <https://atlas.ripe.net/apply/swprobe/> (requires a free RIPE NCC Access
    account; software probes are always public probes).
-4. Wait for approval — the status dot turns green once the probe is connected
+5. Wait for approval — the status dot turns green once the probe is connected
    to a controller. No further configuration is needed.
 
 ## Command Line Setup
 
-The host needs a dedicated gVisor runtime because RIPE Atlas performs raw ICMP
-measurements. Keep raw sockets disabled on the general-purpose `runsc` runtime
-and add this sibling to `/etc/docker/daemon.json`:
-
-```json
-"runsc-net-raw": {
-  "path": "/usr/local/bin/runsc",
-  "runtimeArgs": [
-    "--host-uds=create",
-    "--net-raw=true",
-    "--platform=kvm"
-  ]
-}
-```
-
-Restart Docker after changing the daemon configuration. Then install the
-plugin:
+The host needs ARM64 KVM and the dedicated `krun-atlas` OCI runtime:
 
 ```bash
-cd /home/spr/super/plugins/
-git clone https://github.com/spr-networks/spr-atlas
-cd spr-atlas
+test -c /dev/kvm
+```
+
+On the Debian 13 ARM64 SPR host, clone this repository and run:
+
+```bash
+cd /home/spr/super/plugins/user/spr-atlas
+./setup_krun_runtime.sh
+./setup_spr_device_integration.sh /home/spr/super
+```
+
+The setup script installs pinned `libkrunfw` 5.5.0, builds pinned `libkrun`
+1.19.4 with virtio-net support, and builds crun 1.28 with its libkrun handler.
+It registers a dedicated Docker runtime at
+`/usr/local/libexec/krun-atlas/krun` and reloads Docker. It does not reboot the
+host or restart Docker, so existing containers remain up.
+
+The second script applies the included SPR Core patches for DHCP-backed
+virtual plugin devices and the CoreDHCP broadcast-reply fix required by
+libkrun's embedded client. It rebuilds/recreates only `superapi` and
+`superdhcp`, is idempotent, and refuses to apply if the source has diverged.
+Once these changes are part of the base SPR release, the script becomes a
+no-op.
+
+`krun-atlas` carries small, auditable crun patches that create a dedicated
+host TAP through libkrun and configure a direct host
+Unix-socket-to-guest-vsock mapping, plus a libkrun patch that makes its
+embedded DHCP client reliable with an external router. `passt` is not
+installed or started.
+SPR remains the DHCP server, router, DNS policy point, and firewall for all
+guest traffic, including Atlas DNS, SSH, ICMP, and traceroute.
+
+Confirm Docker sees it:
+
+```bash
+docker info --format '{{json .Runtimes}}' | grep krun-atlas
+```
+
+Then use the SPR UI, or install from the command line:
+
+```bash
 ./install.sh   # prompts for the SUPER dir and an SPR API token
 ```
 
-The script builds the image, starts the container, grants the `spr-atlas`
-bridge `wan`+`dns` policies via the SPR API, and prints the probe public key
-to register.
+The script builds the image, starts the microVM, registers its stable MAC as
+an SPR device with `wan` + `dns` policies, waits for its SPR DHCP lease, and
+prints the probe public key to register.
 
 Run the end-to-end host check after installation:
 
 ```bash
-./test_gvisor.sh /home/spr/super/
+sudo ./test_krun.sh /home/spr/super/
 ```
 
-It verifies the selected Docker runtime, the host-visible plugin socket and
-API, and an actual RIPE Atlas raw-ICMP measurement from the sandbox.
+It verifies the KVM runtime, direct UDS-to-vsock API path with no IP listener,
+host-visible plugin socket/API, and the probe's DNS + raw-ICMP registration
+check from this boot.
+
+`plugin.json` deliberately selects `docker-compose-krun.yml`.
+`docker-compose.yml` contains the shared service definition and remains a
+plain-runc diagnostic fallback; it is not the installed production mode.
+`docker-compose-gvisor.yml` remains for compatible 4 KiB hosts, but gVisor
+cannot run on the 16 KiB ARM64 kernel used by the tested SPR router.
 
 ## API
 
-All endpoints are served over the plugin unix socket
-(`/state/plugins/spr-atlas/socket`) and proxied by SPR under
+All endpoints are served over the host-visible plugin Unix socket
+(`/state/plugins/spr-atlas/api/socket`) and proxied by SPR under
 `/plugins/spr-atlas/`.
+
+Inside the microVM, the `spr-krun-plugin` bridge listens on virtio-vsock port
+4040 and forwards the byte stream to Atlas's guest-local Unix socket.
+`krun-atlas` asks libkrun to create the real host Unix socket and map accepted
+connections to that vsock listener. There is no TCP/UDP API listener, TCP
+proxy, sidecar, or Docker-published port.
 
 | Method | Path       | Description                                                                                             |
 | ------ | ---------- | ------------------------------------------------------------------------------------------------------- |
@@ -130,7 +176,8 @@ reporting, so startup persistently sets `RXTXRPT=yes` in
 | `state/plugins/spr-atlas/etc/`         | `/etc/ripe-atlas`       | probe ssh keypair, mode, reg servers       |
 | `state/plugins/spr-atlas/spool/`       | `/var/spool/ripe-atlas` | measurement spool/crontabs                 |
 | `state/plugins/spr-atlas/log/`         | —                       | captured probe log (size-capped)           |
-| `configs/plugins/spr-atlas/api-token`  | `/configs/spr-atlas`    | SPR API token written at install (unused by the backend today) |
+| `state/plugins/spr-atlas/api/socket`   | libkrun ↔ vsock 4040 ↔ guest UDS | host-visible SPR plugin API socket |
+| `configs/plugins/spr-atlas/api-token`  | —                       | SPR API token written at install (unused by the backend today) |
 
 To reset the probe identity (new probe application), stop the plugin and
 delete `state/plugins/spr-atlas/etc/probe_key*`; a new keypair is generated on
@@ -138,21 +185,36 @@ the next start.
 
 ## Security model
 
-- **No published ports.** The backend listens only on the plugin unix socket;
-  SPR proxies the UI/API. The probe makes **outbound-only** connections:
-  ssh to RIPE registration/controller servers on port 443, plus the
-  measurements themselves.
-- **gVisor sandbox.** `docker-compose-gvisor.yml` selects the dedicated
-  `runsc-net-raw` runtime. `--host-uds=create` lets Atlas create its
-  host-visible plugin API socket without allowing it to open host-created
-  sockets, and `--net-raw=true` lets gVisor retain the container's explicitly
-  granted `NET_RAW` capability. The ordinary `docker-compose.yml` remains
-  available as an runc fallback for diagnosis.
-- **Own bridge network** (`spr-atlas`) with SPR policies `wan` and `dns` only —
-  the container cannot reach LAN devices or the SPR API.
-- **`cap_add: NET_RAW` only.** The measurement engine (busybox applets
-  `evping`/`evtraceroute`) opens raw ICMP sockets. `NET_ADMIN` is *not*
-  granted: the probe never creates interfaces, routes or firewall rules.
+- **No IP API socket.** SPR reaches the backend only through the dedicated
+  host Unix socket and libkrun's virtio-vsock mapping. The API has no TCP/UDP
+  listener, proxy sidecar, or Docker-published port. The probe makes
+  **outbound-only** network connections: ssh to RIPE
+  registration/controller servers on port 443, plus the measurements
+  themselves.
+- **Full guest kernel under KVM.** `docker-compose-krun.yml` selects crun's
+  libkrun handler. Atlas runs in the Linux kernel bundled by libkrunfw, while
+  the OCI root filesystem and persistent state are presented through
+  virtiofs. On a 16 KiB ARM64 host the guest still uses 4 KiB pages.
+- **Direct TAP, no userspace network stack.** Atlas needs real virtio-net for
+  raw ICMP; libkrun's socket-only TSI mode cannot provide raw sockets. The
+  dedicated runtime connects virtio-net directly to host TAP `katlas0`.
+  CoreDHCP sees the stable MAC as an SPR device and assigns its `/30`, route,
+  DNS, groups, and policies. No `passt`, slirp, proxy, bridge, or second DHCP
+  server is involved.
+- **Unix/vsock-only IPC.** libkrun owns the host socket and forwards its byte
+  stream over virtio-vsock to the reusable `spr-krun-plugin` bridge, which
+  connects to Atlas's guest-local Unix socket. The guest never receives a
+  host filesystem socket or an IP-reachable API endpoint.
+- **Normal SPR device policy.** `plugin.json` authorizes only
+  `katlas0 . 02:53:50:52:40:40` for DHCP and assigns `wan` + `dns`; it does
+  not grant `lan` or `api`.
+- **Router DNS, still policy-controlled.** libkrun's embedded boot-time DHCP
+  client receives the address, route, MTU, and DNS settings from SPR
+  CoreDHCP before Atlas starts. The dedicated runtime patches its upstream
+  100 ms single wait to use bounded retries suitable for an external router.
+- **Guest-scoped network capabilities.** `NET_RAW` lets the unprivileged
+  measurement engine open raw ICMP sockets. Atlas and the reusable bridge do
+  not receive `NET_ADMIN`; the bridge explicitly drops all capabilities.
 - **Unprivileged probe.** The container starts as root only to fix ownership
   of mounted state dirs, then runs the whole probe tree as the `ripe-atlas`
   user with a single ambient capability (`cap_net_raw`) via `setpriv`
@@ -170,6 +232,9 @@ the next start.
   permission to open host-created UDSes.
 - The probe's built-in telnetd binds `127.0.0.1:2023` *inside* the container
   namespace only (upstream behaviour; unreachable from anywhere else).
+- **No `docker exec`.** The krun handler intentionally does not implement
+  exec into a running microVM. Use the plugin API, UI, logs, and
+  `test_krun.sh` for inspection.
 
 ## Upstream project
 
@@ -189,6 +254,11 @@ and the RIPE Atlas source by release tag + **full commit hash**
 the upstream `VERSION` file at build time). The local IPv4 startup-check patch
 is applied with `git apply --check`, so an incompatible upstream change fails
 the build instead of silently producing a different image.
+
+The host-runtime installer separately pins the libkrunfw archive by SHA256,
+libkrun by full commit, Rust by version, and the crun release archive by
+SHA256. The dedicated UDS/vsock and direct-TAP patches are applied with
+`git apply --check`.
 
 - `./build_docker_compose.sh` — reproducible local build (buildx +
   `rewrite-timestamp`, `SOURCE_DATE_EPOCH=0`)

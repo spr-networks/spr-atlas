@@ -25,14 +25,14 @@ services:
     networks:
       atlasnet:
     volumes:
-      - "${SUPERDIR}./state/plugins/spr-atlas:/state/plugins/spr-atlas"
+      - "${SUPERDIR:-/home/spr/super}/state/plugins/spr-atlas:/state/plugins/spr-atlas"
       # Probe identity (ssh keypair) + config: survives rebuilds/upgrades.
-      - "${SUPERDIR}./state/plugins/spr-atlas/etc:/etc/ripe-atlas"
+      - "${SUPERDIR:-/home/spr/super}/state/plugins/spr-atlas/etc:/etc/ripe-atlas"
       # Probe working/spool dir (measurement queues, crontabs).
-      - "${SUPERDIR}./state/plugins/spr-atlas/spool:/var/spool/ripe-atlas"
+      - "${SUPERDIR:-/home/spr/super}/state/plugins/spr-atlas/spool:/var/spool/ripe-atlas"
 
-# Note: if updating the bridge name, also update plugin.json
-# NetworkCapabilities.Interface and install.sh.
+# Diagnostic runc/gVisor network. Production krun uses the katlas0 TAP
+# declared in docker-compose-krun.yml and plugin.json instead.
 networks:
   atlasnet:
     name: spr-atlas

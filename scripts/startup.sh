@@ -4,11 +4,11 @@
 # binary which supervises the probe main loop and serves the API/UI socket.
 set -e
 
-# runsc strips CAP_NET_RAW unless its runtime is configured with
-# --net-raw=true. Fail before creating probe state rather than starting a
-# probe that can register but cannot perform ICMP measurements.
+# Fail before creating probe state rather than starting a probe that can
+# register but cannot perform ICMP measurements. gVisor additionally requires
+# its runtime to be configured with --net-raw=true.
 if ! setpriv --dump | grep -q '^Capability bounding set:.*net_raw'; then
-    echo "spr-atlas requires CAP_NET_RAW; configure runsc with --net-raw=true" >&2
+    echo "spr-atlas requires the selected runtime to retain CAP_NET_RAW" >&2
     exit 1
 fi
 

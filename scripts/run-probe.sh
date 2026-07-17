@@ -7,7 +7,7 @@
 # ambient caps survive execve for unprivileged users even under
 # no-new-privileges, which is exactly what the measurement binaries
 # (evping/evtraceroute) need to open raw ICMP sockets. This is the only
-# capability the probe tree keeps; NET_ADMIN is not granted at all.
+# capability the probe tree keeps.
 set -e
 
 export HOME=/var/spool/ripe-atlas

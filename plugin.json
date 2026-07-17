@@ -1,7 +1,7 @@
 {
   "Name": "spr-atlas",
-  "ComposeFilePath": "plugins/user/spr-atlas/docker-compose-gvisor.yml",
-  "UnixPath": "/state/plugins/spr-atlas/socket",
+  "ComposeFilePath": "plugins/user/spr-atlas/docker-compose-krun.yml",
+  "UnixPath": "/state/plugins/spr-atlas/api/socket",
   "URI": "spr-atlas",
   "HasUI": true,
   "Icon": "Radar",
@@ -9,7 +9,8 @@
   "SandboxedUI": false,
   "InstallTokenPath": "/configs/plugins/spr-atlas/api-token",
   "NetworkCapabilities": {
-    "Interface": "spr-atlas",
+    "Interface": "katlas0",
+    "DeviceMAC": "02:53:50:52:40:40",
     "Policies": ["wan", "dns"],
     "Groups": []
   },

@@ -1,0 +1,35 @@
+# KVM-isolated deployment using crun's libkrun handler. The base service
+# remains in docker-compose.yml so image and capability settings cannot drift.
+#
+# Atlas needs raw ICMP, so krun gives the guest a real virtio-net interface
+# backed directly by a host TAP. SPR CoreDHCP sees the TAP as a normal
+# device-facing interface and owns the guest's address, gateway, DNS and
+# policy. No userspace IP stack or extra DHCP server is involved.
+services:
+  spr-atlas:
+    extends:
+      file: docker-compose.yml
+      service: spr-atlas
+    runtime: ${ATLAS_RUNTIME:-krun-atlas}
+    # The trusted VMM creates katlas0 in SPR's host namespace. Guest processes
+    # remain inside KVM and can reach that namespace only through virtio-net.
+    network_mode: host
+    networks: !reset []
+    annotations:
+      krun.cpus: "${ATLAS_KRUN_CPUS:-1}"
+      krun.ram_mib: "${ATLAS_KRUN_RAM_MIB:-512}"
+      krun.tap_name: "katlas0"
+      krun.net_mac: "${ATLAS_MAC:-02:53:50:52:40:40}"
+      krun.vsock_path: "/state/plugins/spr-atlas/api/socket"
+      krun.vsock_port: "4040"
+    environment:
+      SPR_KRUN_PLUGIN_SOCKET: "/run/spr-krun-plugin/spr-atlas.sock"
+      SPR_KRUN_VSOCK_PORT: "4040"
+    devices:
+      # libkrun opens the TAP after the dedicated crun handler creates it in
+      # the host network namespace.
+      - "/dev/net/tun:/dev/net/tun"
+    volumes:
+      # A dedicated nested bind makes Docker create the socket's parent before
+      # libkrun starts (including on a first-time UI installation).
+      - "${SUPERDIR:-/home/spr/super}/state/plugins/spr-atlas/api:/state/plugins/spr-atlas/api"
