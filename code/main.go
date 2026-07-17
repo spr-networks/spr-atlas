@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 )
 
 var UNIX_PLUGIN_LISTENER = "/state/plugins/spr-atlas/socket"
@@ -107,8 +108,12 @@ func logRequest(handler http.Handler) http.Handler {
 }
 
 func main() {
+	// The plugin socket is created on a host bind mount. Some filesystem
+	// proxies cannot chmod an existing UDS, so request restrictive creation
+	// permissions first and treat chmod as best-effort.
+	syscall.Umask(0007)
+
 	sup := NewSupervisor(ProbeCommand)
-	sup.Start()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /status", handleGetStatus(sup))
@@ -121,11 +126,17 @@ func main() {
 	os.Remove(UNIX_PLUGIN_LISTENER)
 	listener, err := net.Listen("unix", UNIX_PLUGIN_LISTENER)
 	if err != nil {
-		panic(err)
+		log.Fatalf(
+			"listen on plugin socket %s failed (gVisor requires --host-uds=create or --host-uds=all): %v",
+			UNIX_PLUGIN_LISTENER,
+			err,
+		)
 	}
 	if err := os.Chmod(UNIX_PLUGIN_LISTENER, 0770); err != nil {
-		panic(err)
+		log.Println("socket chmod unavailable; host runtime controls proxy permissions:", err)
 	}
+
+	sup.Start()
 
 	server := http.Server{Handler: logRequest(mux)}
 	if err := server.Serve(listener); err != nil {

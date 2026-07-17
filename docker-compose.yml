@@ -1,5 +1,3 @@
-version: '3.4'
-
 x-labels:
   &default-labels
   # constant (not $CI) so digests are reproducible across CI/local
@@ -32,10 +30,6 @@ services:
       - "${SUPERDIR}./state/plugins/spr-atlas/etc:/etc/ripe-atlas"
       # Probe working/spool dir (measurement queues, crontabs).
       - "${SUPERDIR}./state/plugins/spr-atlas/spool:/var/spool/ripe-atlas"
-      - "${SUPERDIR}./state/public/:/state/public/:ro"
-      - "${SUPERDIR}./state/api/:/state/api/:ro"
-      - "${SUPERDIR}./configs/base/config.sh:/configs/base/config.sh:ro"
-      - "${SUPERDIR}./configs/plugins/spr-atlas:/configs/spr-atlas"
 
 # Note: if updating the bridge name, also update plugin.json
 # NetworkCapabilities.Interface and install.sh.

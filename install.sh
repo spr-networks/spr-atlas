@@ -1,5 +1,17 @@
 #!/bin/bash
 # Command line install alternative to the UI
+set -euo pipefail
+
+ATLAS_RUNTIME="${ATLAS_RUNTIME:-runsc-net-raw}"
+export ATLAS_RUNTIME
+
+if ! docker info --format '{{json .Runtimes}}' | grep -Fq "\"${ATLAS_RUNTIME}\""; then
+  echo "Docker runtime '${ATLAS_RUNTIME}' is not installed." >&2
+  echo "spr-atlas needs a runsc runtime configured with:" >&2
+  echo "  --host-uds=create --net-raw=true --platform=kvm" >&2
+  exit 1
+fi
+
 echo "Please enter your SPR path (/home/spr/super/)"
 read -r SUPERDIR
 
@@ -26,7 +38,7 @@ printf '%s' "$SPR_API_TOKEN" > "$SUPERDIR/configs/plugins/spr-atlas/api-token"
 chmod 600 "$SUPERDIR/configs/plugins/spr-atlas/api-token"
 
 ./build_docker_compose.sh --load
-docker compose up -d
+docker compose -f docker-compose-gvisor.yml up -d
 
 API=127.0.0.1
 CONTAINER_IP=$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "spr-atlas")

@@ -2,12 +2,15 @@
 # spr-atlas container entrypoint: prepare the RIPE Atlas probe runtime layout,
 # generate the probe ssh keypair on first start, then hand over to the plugin
 # binary which supervises the probe main loop and serves the API/UI socket.
-set -a
-. /configs/base/config.sh
-if [ -f /configs/spr-atlas/config.sh ]; then
-    . /configs/spr-atlas/config.sh
+set -e
+
+# runsc strips CAP_NET_RAW unless its runtime is configured with
+# --net-raw=true. Fail before creating probe state rather than starting a
+# probe that can register but cannot perform ICMP measurements.
+if ! setpriv --dump | grep -q '^Capability bounding set:.*net_raw'; then
+    echo "spr-atlas requires CAP_NET_RAW; configure runsc with --net-raw=true" >&2
+    exit 1
 fi
-set +a
 
 ATLAS_USER=ripe-atlas
 ATLAS_ETC=/etc/ripe-atlas

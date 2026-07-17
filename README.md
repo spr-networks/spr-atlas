@@ -11,9 +11,9 @@ network vantage point and earns you credits to run your own measurements.
 
 The plugin builds the official
 [RIPE-NCC/ripe-atlas-software-probe](https://github.com/RIPE-NCC/ripe-atlas-software-probe)
-from source at a pinned release, runs it in an isolated container on its own
-`spr-atlas` bridge, and adds a small Go backend + React UI (rendered by SPR as
-an iframe under Plugins) for status, registration and logs.
+from source at a pinned release, runs it under gVisor on its own `spr-atlas`
+bridge, and adds a small Go backend + React UI (rendered by SPR as an iframe
+under Plugins) for status, registration and logs.
 
 On first start the probe generates an RSA ssh keypair — its permanent
 identity. You (the admin) register the **public** key at
@@ -53,6 +53,24 @@ survives container rebuilds and plugin upgrades.
 
 ## Command Line Setup
 
+The host needs a dedicated gVisor runtime because RIPE Atlas performs raw ICMP
+measurements. Keep raw sockets disabled on the general-purpose `runsc` runtime
+and add this sibling to `/etc/docker/daemon.json`:
+
+```json
+"runsc-net-raw": {
+  "path": "/usr/local/bin/runsc",
+  "runtimeArgs": [
+    "--host-uds=create",
+    "--net-raw=true",
+    "--platform=kvm"
+  ]
+}
+```
+
+Restart Docker after changing the daemon configuration. Then install the
+plugin:
+
 ```bash
 cd /home/spr/super/plugins/
 git clone https://github.com/spr-networks/spr-atlas
@@ -63,6 +81,15 @@ cd spr-atlas
 The script builds the image, starts the container, grants the `spr-atlas`
 bridge `wan`+`dns` policies via the SPR API, and prints the probe public key
 to register.
+
+Run the end-to-end host check after installation:
+
+```bash
+./test_gvisor.sh /home/spr/super/
+```
+
+It verifies the selected Docker runtime, the host-visible plugin socket and
+API, and an actual RIPE Atlas raw-ICMP measurement from the sandbox.
 
 ## API
 
@@ -115,6 +142,12 @@ the next start.
   SPR proxies the UI/API. The probe makes **outbound-only** connections:
   ssh to RIPE registration/controller servers on port 443, plus the
   measurements themselves.
+- **gVisor sandbox.** `docker-compose-gvisor.yml` selects the dedicated
+  `runsc-net-raw` runtime. `--host-uds=create` lets Atlas create its
+  host-visible plugin API socket without allowing it to open host-created
+  sockets, and `--net-raw=true` lets gVisor retain the container's explicitly
+  granted `NET_RAW` capability. The ordinary `docker-compose.yml` remains
+  available as an runc fallback for diagnosis.
 - **Own bridge network** (`spr-atlas`) with SPR policies `wan` and `dns` only —
   the container cannot reach LAN devices or the SPR API.
 - **`cap_add: NET_RAW` only.** The measurement engine (busybox applets
@@ -132,6 +165,9 @@ the next start.
   stored or served.
 - **Traffic-statistics opt-in.** Installing this dedicated probe plugin enables
   RIPE Atlas interface traffic-statistics reporting with `RXTXRPT=yes`.
+- **No SPRBus mount.** Atlas does not consume SPRBus or call the SPR API, so
+  `/state/api` is deliberately absent and the sandbox is not granted
+  permission to open host-created UDSes.
 - The probe's built-in telnetd binds `127.0.0.1:2023` *inside* the container
   namespace only (upstream behaviour; unreachable from anywhere else).
 

@@ -1,6 +1,6 @@
 {
   "Name": "spr-atlas",
-  "ComposeFilePath": "plugins/user/spr-atlas/docker-compose.yml",
+  "ComposeFilePath": "plugins/user/spr-atlas/docker-compose-gvisor.yml",
   "UnixPath": "/state/plugins/spr-atlas/socket",
   "URI": "spr-atlas",
   "HasUI": true,
