@@ -1,6 +1,6 @@
 {
   "Name": "spr-atlas",
-  "ComposeFilePath": "plugins/user/spr-atlas/docker-compose-krun.yml",
+  "Runtime": "kvm",
   "UnixPath": "/state/plugins/spr-atlas/api/socket",
   "URI": "spr-atlas",
   "HasUI": true,

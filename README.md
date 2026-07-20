@@ -118,7 +118,8 @@ It verifies the KVM runtime, direct UDS-to-vsock API path with no IP listener,
 host-visible plugin socket/API, and the probe's DNS + raw-ICMP registration
 check from this boot.
 
-`plugin.json` deliberately selects `docker-compose-krun.yml`.
+`plugin.json` declares `"Runtime": "kvm"`, so superd selects
+`docker-compose-kvm.yml`.
 `docker-compose.yml` contains the shared service definition and remains a
 plain-runc diagnostic fallback; it is not the installed production mode.
 `docker-compose-gvisor.yml` remains for compatible 4 KiB hosts, but gVisor
@@ -184,7 +185,7 @@ the next start.
   **outbound-only** network connections: ssh to RIPE
   registration/controller servers on port 443, plus the measurements
   themselves.
-- **Full guest kernel under KVM.** `docker-compose-krun.yml` selects crun's
+- **Full guest kernel under KVM.** `docker-compose-kvm.yml` selects crun's
   libkrun handler. Atlas runs in the Linux kernel bundled by libkrunfw, while
   the OCI root filesystem and persistent state are presented through
   virtiofs. On a 16 KiB ARM64 host the guest still uses 4 KiB pages.

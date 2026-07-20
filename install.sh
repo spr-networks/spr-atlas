@@ -87,7 +87,7 @@ if [ -f "$KRUN_PLUGIN_DIR/Dockerfile" ]; then
 fi
 
 ./build_docker_compose.sh --load
-docker compose -f docker-compose-krun.yml up -d --remove-orphans
+docker compose -f docker-compose-kvm.yml up -d --remove-orphans
 
 ATLAS_IP=
 for _ in $(seq 1 30); do
