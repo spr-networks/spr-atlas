@@ -3,7 +3,7 @@
 set -euo pipefail
 
 CONTAINER="${ATLAS_CONTAINER:-spr-atlas}"
-EXPECTED_RUNTIME="${ATLAS_RUNTIME:-krun-atlas}"
+EXPECTED_RUNTIME="${ATLAS_RUNTIME:-spr-krun}"
 ATLAS_MAC="${ATLAS_MAC:-02:53:50:52:40:40}"
 SUPERDIR="${1:-${SUPERDIR:-/home/spr/super/}}"
 STATE_DIR="${SUPERDIR%/}/state/plugins/spr-atlas"

@@ -10,7 +10,7 @@ services:
     extends:
       file: docker-compose.yml
       service: spr-atlas
-    runtime: ${ATLAS_RUNTIME:-krun-atlas}
+    runtime: ${ATLAS_RUNTIME:-spr-krun}
     # The trusted VMM creates katlas0 in SPR's host namespace. Guest processes
     # remain inside KVM and can reach that namespace only through virtio-net.
     network_mode: host

@@ -51,7 +51,7 @@ survives container rebuilds and plugin upgrades.
 
 ## UI Setup
 
-1. Install the host's `krun-atlas` runtime once, as described under
+1. Install the host's `spr-krun-runtime` Debian package once, as described under
    [Command Line Setup](#command-line-setup).
 2. In the SPR UI, go to **Plugins** → `+ New Plugin` and add
    `https://github.com/spr-networks/spr-atlas`.
@@ -64,35 +64,28 @@ survives container rebuilds and plugin upgrades.
 
 ## Command Line Setup
 
-The host needs ARM64 KVM and the dedicated `krun-atlas` OCI runtime:
+The host needs ARM64 KVM and the generic `spr-krun` OCI runtime:
 
 ```bash
 test -c /dev/kvm
 ```
 
-On the Debian 13 ARM64 SPR host, clone this repository and run:
+The runtime is a versioned release asset from
+[`spr-networks/super`](https://github.com/spr-networks/super/releases).
+Install or upgrade that host package, then verify KVM:
 
 ```bash
-cd /home/spr/super/plugins/user/spr-atlas
-./setup_krun_runtime.sh
-./setup_spr_device_integration.sh /home/spr/super
+sudo apt-get install ./spr-krun-runtime_*_arm64.deb
+test -c /dev/kvm
 ```
 
-The setup script installs pinned `libkrunfw` 5.5.0, builds pinned `libkrun`
-1.19.4 with virtio-net support, and builds crun 1.28 with its libkrun handler.
-It registers a dedicated Docker runtime at
-`/usr/local/libexec/krun-atlas/krun` and reloads Docker. It does not reboot the
-host or restart Docker, so existing containers remain up.
+The package installs pinned `libkrunfw`, patched `libkrun`, and patched crun
+under private package paths. It merges only the `spr-krun` entry into Docker's
+existing configuration and reloads Docker without rebooting the host or
+restarting running containers.
 
-The second script applies the included SPR Core patches for DHCP-backed
-virtual plugin devices and the CoreDHCP broadcast-reply fix required by
-libkrun's embedded client. It rebuilds/recreates only `superapi` and
-`superdhcp`, is idempotent, and refuses to apply if the source has diverged.
-Once these changes are part of the base SPR release, the script becomes a
-no-op.
-
-`krun-atlas` carries small, auditable crun patches that create a dedicated
-host TAP through libkrun and configure a direct host
+`spr-krun` carries small, auditable patches that create a dedicated host TAP
+through libkrun and configure a direct host
 Unix-socket-to-guest-vsock mapping, plus a libkrun patch that makes its
 embedded DHCP client reliable with an external router. `passt` is not
 installed or started.
@@ -102,7 +95,7 @@ guest traffic, including Atlas DNS, SSH, ICMP, and traceroute.
 Confirm Docker sees it:
 
 ```bash
-docker info --format '{{json .Runtimes}}' | grep krun-atlas
+docker info --format '{{json .Runtimes}}' | grep spr-krun
 ```
 
 Then use the SPR UI, or install from the command line:
@@ -139,7 +132,7 @@ All endpoints are served over the host-visible plugin Unix socket
 
 Inside the microVM, the `spr-krun-plugin` bridge listens on virtio-vsock port
 4040 and forwards the byte stream to Atlas's guest-local Unix socket.
-`krun-atlas` asks libkrun to create the real host Unix socket and map accepted
+`spr-krun` asks libkrun to create the real host Unix socket and map accepted
 connections to that vsock listener. There is no TCP/UDP API listener, TCP
 proxy, sidecar, or Docker-published port.
 

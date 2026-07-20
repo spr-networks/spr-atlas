@@ -2,7 +2,7 @@
 # Command line install alternative to the UI
 set -euo pipefail
 
-ATLAS_RUNTIME="${ATLAS_RUNTIME:-krun-atlas}"
+ATLAS_RUNTIME="${ATLAS_RUNTIME:-spr-krun}"
 ATLAS_MAC="${ATLAS_MAC:-02:53:50:52:40:40}"
 ATLAS_TAP="katlas0"
 export ATLAS_RUNTIME
@@ -15,7 +15,7 @@ fi
 
 if ! docker info --format '{{json .Runtimes}}' | grep -Fq "\"${ATLAS_RUNTIME}\""; then
   echo "Docker runtime '${ATLAS_RUNTIME}' is not installed." >&2
-  echo "Install the dedicated crun/libkrun runtime as 'krun-atlas'." >&2
+  echo "Install the SPR crun/libkrun host package, which registers 'spr-krun'." >&2
   exit 1
 fi
 
@@ -36,7 +36,7 @@ export SUPERDIR
 if ! grep -Fq 'recentDHCPIfaces := map[string]string{}' \
   "$SUPERDIR/api/code/firewall.go" 2>/dev/null; then
   echo "SPR virtual-device routing support is not installed." >&2
-  echo "Run ./setup_spr_device_integration.sh \"$SUPERDIR\" first." >&2
+  echo "Upgrade SPR to a release that includes krun plugin-device networking." >&2
   exit 1
 fi
 
