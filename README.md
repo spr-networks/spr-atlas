@@ -120,8 +120,8 @@ check from this boot.
 
 `plugin.json` declares `"Runtime": "kvm"`, so superd selects
 `docker-compose-kvm.yml`.
-`docker-compose.yml` contains the shared service definition and remains a
-plain-runc diagnostic fallback; it is not the installed production mode.
+`docker-compose.yml` contains the shared service definition and private plugin
+network inherited by the KVM deployment.
 `docker-compose-gvisor.yml` remains for compatible 4 KiB hosts, but gVisor
 cannot run on the 16 KiB ARM64 kernel used by the tested SPR router.
 
@@ -188,10 +188,13 @@ the next start.
 - **Full guest kernel under KVM.** `docker-compose-kvm.yml` selects crun's
   libkrun handler. Atlas runs in the Linux kernel bundled by libkrunfw, while
   the OCI root filesystem and persistent state are presented through
-  virtiofs. On a 16 KiB ARM64 host the guest still uses 4 KiB pages.
+  virtiofs. Its TAP is bridged into the private `spr-atlas` Docker network; it
+  does not share SPR's host network namespace. On a 16 KiB ARM64 host the guest
+  still uses 4 KiB pages.
 - **Direct TAP, no userspace network stack.** Atlas needs real virtio-net for
   raw ICMP; libkrun's socket-only TSI mode cannot provide raw sockets. The
-  dedicated runtime connects virtio-net directly to host TAP `katlas0`.
+  dedicated runtime connects virtio-net to a TAP inside the container network
+  namespace and bridges it to the private `spr-atlas` Docker network.
   CoreDHCP sees the stable MAC as an SPR device and assigns its `/30`, route,
   DNS, groups, and policies. No `passt`, slirp, proxy, bridge, or second DHCP
   server is involved.

@@ -31,8 +31,6 @@ services:
       # Probe working/spool dir (measurement queues, crontabs).
       - "${SUPERDIR:-/home/spr/super}/state/plugins/spr-atlas/spool:/var/spool/ripe-atlas"
 
-# Diagnostic runc/gVisor network. The KVM deployment uses the katlas0 TAP
-# declared in docker-compose-kvm.yml and plugin.json instead.
 networks:
   atlasnet:
     name: spr-atlas

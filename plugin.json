@@ -9,7 +9,7 @@
   "SandboxedUI": false,
   "InstallTokenPath": "/configs/plugins/spr-atlas/api-token",
   "NetworkCapabilities": {
-    "Interface": "katlas0",
+    "Interface": "spr-atlas",
     "DeviceMAC": "02:53:50:52:40:40",
     "Policies": ["wan", "dns"],
     "Groups": []
