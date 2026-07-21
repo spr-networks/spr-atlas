@@ -13,7 +13,7 @@ services:
     runtime: ${ATLAS_RUNTIME:-spr-krun}
     annotations:
       krun.cpus: "${ATLAS_KRUN_CPUS:-1}"
-      krun.ram_mib: "${ATLAS_KRUN_RAM_MIB:-512}"
+      krun.ram_mib: "${ATLAS_KRUN_RAM_MIB:-128}"
       krun.tap_name: "kruntap0"
       krun.net_uplink: "eth0"
       krun.net_mac: "${ATLAS_MAC:-02:53:50:52:40:40}"
