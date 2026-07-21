@@ -14,9 +14,11 @@ The plugin builds the official
 from source at a pinned release, runs it in a KVM microVM using
 [libkrun](https://github.com/containers/libkrun), and adds a small Go backend
 + React UI (rendered by SPR as an iframe under Plugins) for status,
-registration and logs. The VM's virtio-net device is backed by host TAP
-`katlas0`; SPR CoreDHCP assigns the stable VM MAC a normal tiny-subnet lease
-and applies the declared `wan` + `dns` device policies. The microVM boots the
+registration and logs. The VM's virtio-net device is backed by `kruntap0`
+inside its private OCI network namespace. An internal kernel bridge connects
+that TAP to Docker's veth and the host's dedicated `spr-atlas` bridge. SPR
+CoreDHCP assigns the stable VM MAC a normal tiny-subnet lease and applies the
+declared `wan` + `dns` device policies. The microVM boots the
 full Linux kernel bundled by
 [libkrunfw](https://github.com/containers/libkrunfw), independently of the
 host's page size. Its final image inherits
@@ -84,9 +86,9 @@ under private package paths. It merges only the `spr-krun` entry into Docker's
 existing configuration and reloads Docker without rebooting the host or
 restarting running containers.
 
-`spr-krun` carries small, auditable patches that create a dedicated host TAP
-through libkrun and configure a direct host
-Unix-socket-to-guest-vsock mapping, plus a libkrun patch that makes its
+`spr-krun` carries small, auditable patches that create a dedicated TAP and
+kernel bridge inside each plugin's private OCI network namespace and configure
+a direct host Unix-socket-to-guest-vsock mapping, plus a libkrun patch that makes its
 embedded DHCP client reliable with an external router. `passt` is not
 installed or started.
 SPR remains the DHCP server, router, DNS policy point, and firewall for all
@@ -196,14 +198,15 @@ the next start.
   dedicated runtime connects virtio-net to a TAP inside the container network
   namespace and bridges it to the private `spr-atlas` Docker network.
   CoreDHCP sees the stable MAC as an SPR device and assigns its `/30`, route,
-  DNS, groups, and policies. No `passt`, slirp, proxy, bridge, or second DHCP
+  DNS, groups, and policies. The forwarding path uses only kernel TAP, bridge,
+  and veth devices; no `passt`, slirp, userspace network proxy, or second DHCP
   server is involved.
 - **Unix/vsock-only IPC.** libkrun owns the host socket and forwards its byte
   stream over virtio-vsock to the reusable `spr-krun-plugin` bridge, which
   connects to Atlas's guest-local Unix socket. The guest never receives a
   host filesystem socket or an IP-reachable API endpoint.
 - **Normal SPR device policy.** `plugin.json` authorizes only
-  `katlas0 . 02:53:50:52:40:40` for DHCP and assigns `wan` + `dns`; it does
+  `spr-atlas . 02:53:50:52:40:40` for DHCP and assigns `wan` + `dns`; it does
   not grant `lan` or `api`.
 - **Router DNS, still policy-controlled.** libkrun's embedded boot-time DHCP
   client receives the address, route, MTU, and DNS settings from SPR

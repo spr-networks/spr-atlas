@@ -4,7 +4,7 @@ set -euo pipefail
 
 ATLAS_RUNTIME="${ATLAS_RUNTIME:-spr-krun}"
 ATLAS_MAC="${ATLAS_MAC:-02:53:50:52:40:40}"
-ATLAS_TAP="katlas0"
+ATLAS_INTERFACE="spr-atlas"
 export ATLAS_RUNTIME
 export ATLAS_MAC
 
@@ -71,9 +71,9 @@ curl --fail-with-body --silent --show-error \
 # The UI plugin path installs this exact authorization from plugin.json.
 # Mirror it for the command-line compose path.
 if ! sudo nft get element inet filter dhcp_access \
-  "{ \"${ATLAS_TAP}\" . ${ATLAS_MAC} }" >/dev/null 2>&1; then
+  "{ \"${ATLAS_INTERFACE}\" . ${ATLAS_MAC} }" >/dev/null 2>&1; then
   sudo nft add element inet filter dhcp_access \
-    "{ \"${ATLAS_TAP}\" . ${ATLAS_MAC} : accept }"
+    "{ \"${ATLAS_INTERFACE}\" . ${ATLAS_MAC} : accept }"
 fi
 
 # During local development, build the sibling template and use Docker's
@@ -98,13 +98,13 @@ for _ in $(seq 1 30); do
   )"
   ATLAS_IP="$(jq -r '.RecentIP // empty' <<<"$DEVICE")"
   LEASE_IFACE="$(jq -r '.DHCPLastInterface // empty' <<<"$DEVICE")"
-  if [ -n "$ATLAS_IP" ] && [ "$LEASE_IFACE" = "$ATLAS_TAP" ]; then
+  if [ -n "$ATLAS_IP" ] && [ "$LEASE_IFACE" = "$ATLAS_INTERFACE" ]; then
     break
   fi
   sleep 1
 done
-if [ -z "$ATLAS_IP" ] || [ "${LEASE_IFACE:-}" != "$ATLAS_TAP" ]; then
-  echo "spr-atlas did not obtain an SPR DHCP lease on interface $ATLAS_TAP" >&2
+if [ -z "$ATLAS_IP" ] || [ "${LEASE_IFACE:-}" != "$ATLAS_INTERFACE" ]; then
+  echo "spr-atlas did not obtain an SPR DHCP lease on interface $ATLAS_INTERFACE" >&2
   exit 1
 fi
 

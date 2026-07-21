@@ -23,6 +23,7 @@ RUNNING="$(docker inspect --format '{{.State.Running}}' "$CONTAINER")"
 RUNTIME="$(docker inspect --format '{{.HostConfig.Runtime}}' "$CONTAINER")"
 PID="$(docker inspect --format '{{.State.Pid}}' "$CONTAINER")"
 CAPS="$(docker inspect --format '{{json .HostConfig.CapAdd}}' "$CONTAINER")"
+NETWORK_MODE="$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$CONTAINER")"
 
 if [ "$RUNNING" != "true" ]; then
     echo "$CONTAINER is not running" >&2
@@ -30,6 +31,10 @@ if [ "$RUNNING" != "true" ]; then
 fi
 if [ "$RUNTIME" != "$EXPECTED_RUNTIME" ]; then
     echo "$CONTAINER uses runtime '$RUNTIME', expected '$EXPECTED_RUNTIME'" >&2
+    exit 1
+fi
+if [ "$NETWORK_MODE" != "spr-atlas" ]; then
+    echo "$CONTAINER uses network '$NETWORK_MODE', expected private network 'spr-atlas'" >&2
     exit 1
 fi
 if ! jq -e 'sort == ["CAP_NET_RAW"]' <<<"$CAPS" >/dev/null; then
@@ -51,8 +56,22 @@ if ss -H -ltnp | grep -F "pid=$PID," >/dev/null; then
     exit 1
 fi
 
-if ! ip link show dev katlas0 >/dev/null 2>&1; then
-    echo "missing Atlas host TAP interface: katlas0" >&2
+if [ "$(readlink /proc/1/ns/net)" = "$(readlink "/proc/${PID}/ns/net")" ]; then
+    echo "Atlas VMM unexpectedly shares the host network namespace" >&2
+    exit 1
+fi
+if ip link show dev kruntap0 >/dev/null 2>&1; then
+    echo "Atlas TAP unexpectedly exists in the host network namespace" >&2
+    exit 1
+fi
+for iface in eth0 kruntap0 krunbr0; do
+    if ! nsenter -t "$PID" -n ip link show dev "$iface" >/dev/null 2>&1; then
+        echo "missing Atlas private network interface: $iface" >&2
+        exit 1
+    fi
+done
+if nsenter -t "$PID" -n ip -4 addr show dev eth0 | grep -q 'inet '; then
+    echo "Docker IP unexpectedly remains assigned to the VMM uplink" >&2
     exit 1
 fi
 if pgrep -x passt >/dev/null 2>&1; then
@@ -73,8 +92,8 @@ fi
 DEVICE="$(jq -c --arg mac "$ATLAS_MAC" '.[$mac] // empty' "$PUBLIC_DEVICES")"
 ATLAS_IP="$(jq -r '.RecentIP // empty' <<<"$DEVICE")"
 ATLAS_IFACE="$(jq -r '.DHCPLastInterface // empty' <<<"$DEVICE")"
-if [ -z "$ATLAS_IP" ] || [ "$ATLAS_IFACE" != "katlas0" ]; then
-    echo "Atlas device $ATLAS_MAC has no SPR DHCP lease on katlas0" >&2
+if [ -z "$ATLAS_IP" ] || [ "$ATLAS_IFACE" != "spr-atlas" ]; then
+    echo "Atlas device $ATLAS_MAC has no SPR DHCP lease on spr-atlas" >&2
     printf 'device state: %s\n' "$DEVICE" >&2
     exit 1
 fi
@@ -101,7 +120,7 @@ if [ -z "$STATUS" ]; then
 fi
 printf 'Atlas runtime: %s\n' "$RUNTIME"
 printf 'Atlas device: %s (%s via SPR DHCP on %s)\n' "$ATLAS_MAC" "$ATLAS_IP" "$ATLAS_IFACE"
-printf 'network: virtio-net -> TAP -> SPR device interface (no passt)\n'
+printf 'network: virtio-net -> private TAP/bridge -> spr-atlas (no passt)\n'
 printf 'plugin IPC: host UDS -> virtio-vsock -> guest UDS (no IP listener)\n'
 printf 'plugin API: %s\n' "$STATUS"
 
