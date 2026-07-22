@@ -7,7 +7,6 @@
   "Icon": "Radar",
   "HasTopology": true,
   "SandboxedUI": false,
-  "InstallTokenPath": "/configs/plugins/spr-atlas/api-token",
   "NetworkCapabilities": {
     "Interface": "spr-atlas",
     "DeviceMAC": "02:53:50:52:40:40",
