@@ -130,7 +130,7 @@ cannot run on the 16 KiB ARM64 kernel used by the tested SPR router.
 ## API
 
 All endpoints are served over the host-visible plugin Unix socket
-(`/state/plugins/spr-atlas/api/socket`) and proxied by SPR under
+(`/state/plugins/spr-atlas/api/socket.sock`) and proxied by SPR under
 `/plugins/spr-atlas/`.
 
 Inside the microVM, the `spr-krun-plugin` bridge listens on virtio-vsock port

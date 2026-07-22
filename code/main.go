@@ -18,7 +18,7 @@ import (
 	"syscall"
 )
 
-const unixPluginListener = "/state/plugins/spr-atlas/api/socket"
+const unixPluginListener = "/state/plugins/spr-atlas/api/socket.sock"
 
 // RegisterURL is where the admin submits the probe public key.
 const RegisterURL = "https://atlas.ripe.net/apply/swprobe/"

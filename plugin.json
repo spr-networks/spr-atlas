@@ -1,7 +1,7 @@
 {
   "Name": "spr-atlas",
   "Runtime": "kvm",
-  "UnixPath": "/state/plugins/spr-atlas/api/socket",
+  "UnixPath": "/state/plugins/spr-atlas/api/socket.sock",
   "URI": "spr-atlas",
   "HasUI": true,
   "Icon": "Radar",
