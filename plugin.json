@@ -1,14 +1,15 @@
 {
   "Name": "spr-atlas",
-  "ComposeFilePath": "plugins/user/spr-atlas/docker-compose.yml",
-  "UnixPath": "/state/plugins/spr-atlas/socket",
+  "Runtime": "kvm",
+  "UnixPath": "/state/plugins/spr-atlas/api/socket",
   "URI": "spr-atlas",
   "HasUI": true,
   "Icon": "Radar",
   "HasTopology": true,
-  "SandboxedUI": false,
+  "SandboxedUI": true,
   "NetworkCapabilities": {
     "Interface": "spr-atlas",
+    "DeviceMAC": "02:53:50:52:40:40",
     "Policies": ["wan", "dns"],
     "Groups": []
   },

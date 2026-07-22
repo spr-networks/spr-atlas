@@ -2,7 +2,7 @@
 ARG ALPINE_REF=alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 ARG UBUNTU_REF=ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
 ARG NODE_REF=node:18@sha256:c6ae79e38498325db67193d391e6ec1d224d96c693a8a4d943498556716d3783
-ARG CONTAINER_TEMPLATE_REF=ghcr.io/spr-networks/container_template@sha256:869ada7b121e9a0c552674042d32e801da3c4d04145638d9e722918c6377e65f
+ARG SPR_KRUN_PLUGIN_REF=ghcr.io/spr-networks/spr-krun-plugin:latest
 ARG SOURCE_DATE_EPOCH
 
 FROM ${ALPINE_REF} AS cacerts
@@ -66,7 +66,7 @@ RUN set -eux; \
     git checkout --detach "${ATLAS_COMMIT}"; \
     test "$(git rev-parse HEAD)" = "${ATLAS_COMMIT}"; \
     test "$(cat VERSION)" = "${ATLAS_VERSION}"
-# This container bridge is IPv4-only. Upstream's evping defaults to IPv6 when
+# This SPR device path is IPv4-only. Upstream's evping defaults to IPv6 when
 # neither -4 nor -6 is supplied, so make only the pre-registration reachability
 # check explicit about IPv4. Scheduled Atlas measurements are not changed.
 COPY patches/0001-use-ipv4-for-registration-ping.patch /tmp/atlas-patches/
@@ -114,18 +114,20 @@ RUN --mount=type=tmpfs,target=/root/.cache \
 # ---------------------------------------------------------------------------
 # Runtime
 # ---------------------------------------------------------------------------
-FROM ${CONTAINER_TEMPLATE_REF}
+FROM ${SPR_KRUN_PLUGIN_REF}
 ENV DEBIAN_FRONTEND=noninteractive
 ARG UBUNTU_SNAPSHOT=20260601T000000Z
 # Runtime deps of the probe (mirrors upstream ripe-atlas-common Depends):
 #  bash (probe scripts), openssh-client (registration + controller channel),
-#  net-tools + iproute2 (ifconfig/arp/route/ip used by the main loop),
-#  psmisc (killall), procps (free/pkill). util-linux provides setpriv.
+#  net-tools (ifconfig/arp/route used by the main loop),
+#  psmisc (killall), procps (free/pkill).
+# The spr-krun-plugin base supplies the vsock-to-Unix bridge. libkrun's
+# embedded init configures virtio-net from SPR DHCP before this image starts.
 RUN set -eux; \
     printf 'Types: deb\nURIs: https://snapshot.ubuntu.com/ubuntu/%s\nSuites: noble noble-updates noble-security\nComponents: main restricted universe multiverse\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n' "${UBUNTU_SNAPSHOT}" > /etc/apt/sources.list.d/ubuntu.sources; \
     printf 'APT::Install-Recommends "false";\nAcquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99reproducible; \
     apt-get update && apt-get install -y --no-install-recommends \
-      bash openssh-client net-tools iproute2 psmisc procps util-linux \
+      bash openssh-client net-tools psmisc procps \
     && rm -rf /var/lib/apt/lists/* /var/log/* /var/cache/ldconfig/aux-cache; \
     rm -f /etc/apt/sources.list.d/ubuntu.sources
 # Unprivileged user the probe runs as (fixed uid/gid for reproducibility).
@@ -140,4 +142,4 @@ COPY scripts /scripts/
 COPY --from=builder /spr_atlas_plugin /
 COPY --from=builder-ui /app/build/ /ui/
 
-ENTRYPOINT ["/scripts/startup.sh"]
+CMD ["/scripts/startup.sh"]

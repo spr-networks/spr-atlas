@@ -1,0 +1,24 @@
+# gVisor deployment for SPR. Keep the complete service definition in
+# docker-compose.yml so builds and the ordinary runc fallback cannot drift.
+#
+# This file is intentionally standalone: SPR's plugin manager accepts one
+# ComposeFilePath, so it cannot apply a conventional second `-f` override.
+services:
+  spr-atlas:
+    extends:
+      file: docker-compose.yml
+      service: spr-atlas
+    # RIPE Atlas opens raw ICMP sockets. The dedicated runtime must be
+    # configured with --net-raw=true, --host-uds=create and the cgroup driver
+    # used by Docker; cap_add: NET_RAW in the base service still limits the
+    # capability at the container boundary. `all` also works for host UDSes,
+    # but grants unnecessary access.
+    runtime: ${ATLAS_RUNTIME:-runsc-net-raw}
+
+# `extends` imports service-level network membership, not top-level network
+# definitions, so repeat only this small engine-owned resource declaration.
+networks:
+  atlasnet:
+    name: spr-atlas
+    driver_opts:
+      com.docker.network.bridge.name: spr-atlas
