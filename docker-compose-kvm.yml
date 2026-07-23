@@ -16,7 +16,6 @@ services:
       krun.ram_mib: "${ATLAS_KRUN_RAM_MIB:-128}"
       krun.tap_name: "kruntap0"
       krun.net_uplink: "eth0"
-      krun.net_mac: "${ATLAS_MAC:-02:53:50:52:40:40}"
       krun.vsock_path: "/state/plugins/spr-atlas/api/socket.sock"
       krun.vsock_port: "4040"
     environment:
