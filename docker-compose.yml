@@ -7,7 +7,7 @@ x-labels:
 services:
   spr-atlas:
     container_name: spr-atlas
-    image: ghcr.io/spr-networks/spr-atlas:${RELEASE_VERSION:-latest}${RELEASE_CHANNEL:-}
+    image: ghcr.io/spr-networks/spr-atlas:latest
     build:
       context: "${BUILDCTX:-.}"
       labels: *default-labels

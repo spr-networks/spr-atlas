@@ -9,7 +9,7 @@ services:
     extends:
       file: docker-compose.yml
       service: spr-atlas
-    image: ghcr.io/spr-networks/spr-atlas:${RELEASE_VERSION:-latest}${RELEASE_CHANNEL:--krun}
+    image: ghcr.io/spr-networks/spr-atlas:latest
     runtime: ${ATLAS_RUNTIME:-spr-krun}
     annotations:
       krun.cpus: "${ATLAS_KRUN_CPUS:-1}"
